@@ -40,3 +40,43 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+# AI Launch System
+
+## Что это
+Внутренняя система запуска, которую я собираю в AI-first формате.
+
+## Текущий стек
+- Next.js
+- React
+- TypeScript
+- pnpm
+- Git
+
+## Цель проекта
+Пошагово собрать операционную систему запуска:
+исследование → оффер → лиды → CRM → оплата → аналитика → автоматизация.
+
+## Текущий этап
+Этап 0.
+Сейчас настраивается базовая среда и AI-режим работы.
+
+## Что уже готово
+- создан проект Next.js
+- локальный запуск работает
+- понятна базовая структура app/page/layout
+- подключён Git
+
+## Базовая структура
+- app/ — страницы и маршруты
+- components/ — переиспользуемые UI-компоненты
+- lib/ — функции, утилиты, данные
+
+## Принцип разработки
+Работаем маленькими шагами.
+Каждая задача:
+1. формулируется отдельно,
+2. сначала планируется,
+3. потом кодится,
+4. потом проверяется вручную,
+5. потом фиксируется через commit.
