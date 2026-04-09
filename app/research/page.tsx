@@ -1,31 +1,15 @@
-import { Montserrat } from "next/font/google";
-
-const montserrat = Montserrat({
-  subsets: ["latin"],
-  weight: "700",
-});
+import HypothesisCard from "@/components/HypothesisCard";
 
 export default function ResearchPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
-      <h1 className={`${montserrat.className} text-4xl font-bold tracking-tight`}>
-        Research
-      </h1>
-      <svg
-        aria-hidden="true"
-        className="h-16 w-16 text-current"
-        fill="none"
-        viewBox="0 0 24 24"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="2" />
-        <path
-          d="M16 16L21 21"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeWidth="2"
-        />
-      </svg>
+    <main style={{ padding: "32px", maxWidth: "1400px", margin: "0 auto" }}>
+      <h1 style={{ marginBottom: "8px" }}>Research Hub</h1>
+      <p style={{ marginTop: 0, marginBottom: "24px", color: "#4b5563", lineHeight: 1.5 }}>
+        Здесь можно быстро собрать живые отзывы из открытых источников под конкретную нишу и
+        позиционирование эксперта.
+      </p>
+
+      <HypothesisCard />
     </main>
   );
 }
