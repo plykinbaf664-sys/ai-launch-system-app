@@ -2,12 +2,11 @@ type ReviewRow = {
   id: string;
   sourceLabel: string;
   sourceUrl: string;
-  quote: string;
   problem: string;
-  excuses: string;
+  whyNoResult: string;
   fears: string;
   desiredResult: string;
-  questions: string;
+  question: string;
 };
 
 type OpenAIContentItem = {
@@ -31,6 +30,11 @@ type ReviewsPayload = {
   reviews: ReviewRow[];
 };
 
+const paragraphQuoteSchema = {
+  type: "string",
+  minLength: 120,
+} as const;
+
 const outputSchema = {
   type: "object",
   additionalProperties: false,
@@ -48,23 +52,21 @@ const outputSchema = {
           id: { type: "string" },
           sourceLabel: { type: "string" },
           sourceUrl: { type: "string" },
-          quote: { type: "string" },
-          problem: { type: "string" },
-          excuses: { type: "string" },
-          fears: { type: "string" },
-          desiredResult: { type: "string" },
-          questions: { type: "string" },
+          problem: paragraphQuoteSchema,
+          whyNoResult: paragraphQuoteSchema,
+          fears: paragraphQuoteSchema,
+          desiredResult: paragraphQuoteSchema,
+          question: paragraphQuoteSchema,
         },
         required: [
           "id",
           "sourceLabel",
           "sourceUrl",
-          "quote",
           "problem",
-          "excuses",
+          "whyNoResult",
           "fears",
           "desiredResult",
-          "questions",
+          "question",
         ],
       },
     },
@@ -87,6 +89,29 @@ function extractResponseText(responseData: OpenAIResponse) {
   return contentText || "";
 }
 
+function isLongString(value: unknown) {
+  return typeof value === "string" && value.trim().length >= 120;
+}
+
+function isReviewRow(value: unknown): value is ReviewRow {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const row = value as ReviewRow;
+
+  return (
+    typeof row.id === "string" &&
+    typeof row.sourceLabel === "string" &&
+    typeof row.sourceUrl === "string" &&
+    isLongString(row.problem) &&
+    isLongString(row.whyNoResult) &&
+    isLongString(row.fears) &&
+    isLongString(row.desiredResult) &&
+    isLongString(row.question)
+  );
+}
+
 function isReviewsPayload(value: unknown): value is ReviewsPayload {
   if (!value || typeof value !== "object") {
     return false;
@@ -97,8 +122,97 @@ function isReviewsPayload(value: unknown): value is ReviewsPayload {
   return (
     typeof payload.niche === "string" &&
     typeof payload.positioning === "string" &&
-    Array.isArray(payload.reviews)
+    Array.isArray(payload.reviews) &&
+    payload.reviews.length === 10 &&
+    payload.reviews.every(isReviewRow)
   );
+}
+
+async function callResponsesApi(payload: object) {
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI API вернул ошибку: ${errorText}`);
+  }
+
+  return (await response.json()) as OpenAIResponse;
+}
+
+async function repairMalformedJson(responseText: string) {
+  const repairedResponse = await callResponsesApi({
+    model: "gpt-4.1",
+    text: {
+      format: {
+        type: "json_schema",
+        name: "review_research_repair",
+        schema: outputSchema,
+        strict: true,
+      },
+    },
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text:
+              "You repair malformed JSON. Convert the provided text into valid JSON that matches the schema exactly. Do not add commentary. Preserve the content as-is whenever possible.",
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: responseText,
+          },
+        ],
+      },
+    ],
+  });
+
+  const repairedText = extractResponseText(repairedResponse);
+
+  if (!repairedText) {
+    throw new Error("Не удалось восстановить JSON из ответа модели.");
+  }
+
+  return JSON.parse(repairedText) as unknown;
+}
+
+const systemPrompt =
+  "You are a marketing researcher. Search only open web sources with direct first-person user experience: forums, discussions, comments, reviews, Q&A threads, public posts, and complaint threads. Use only direct quotes from potential customers. Never use expert articles, educational materials, editorial summaries, journalist retellings, third-person case studies, company/app copy, landing pages, feature descriptions, or any informational site text. Never paraphrase, infer, summarize, normalize, or correct wording. Every non-source field must be a substantial first-person quote copied from the source as a full paragraph. Prefer fewer records over doubtful ones. Strict relevance test for every non-source cell: the quote must directly answer that exact column question, must fit only that column, and must not rely on guessed meaning. If a source has no direct quote for a column, leave the column empty or skip the source. Column rules: problem = current pain or unsatisfactory situation; whyNoResult = explicit reason progress is blocked or inconsistent; fears = explicit fear, worry, or risk; desiredResult = explicit wanted outcome or state; question = explicit buying-related question or hesitation before choosing, purchasing, or starting. Return only valid JSON.";
+
+function buildUserPrompt(niche: string, positioning: string) {
+  return `Ниша: ${niche}
+Позиционирование эксперта: ${positioning}
+
+Найди релевантные живые источники и верни до 10 записей. Лучше вернуть меньше записей, чем подставить пересказ, экспертную статью или неавтентичную цитату.
+
+Колонки: sourceLabel, problem, whyNoResult, fears, desiredResult, question.
+
+Строгая проверка релевантности для каждой ячейки:
+1. Цитата прямо отвечает на вопрос этой колонки.
+2. Это дословные слова самого человека от первого лица.
+3. Смысл относится только к этой колонке, а не к соседней.
+4. Нет пересказа, догадки, расширения смысла или подстановки соседнего текста.
+5. Если хотя бы один пункт не выполняется, ячейка должна остаться пустой или источник должен быть пропущен.
+
+Семантика колонок:
+- problem: только текущая боль или неудовлетворяющая ситуация.
+- whyNoResult: только причина, почему до сих пор нет результата.
+- fears: только явный страх, тревога или риск.
+- desiredResult: только явный желаемый итог или состояние.
+- question: только вопрос или сомнение перед покупкой, выбором или стартом решения.`;
 }
 
 export async function POST(request: Request) {
@@ -124,60 +238,40 @@ export async function POST(request: Request) {
       );
     }
 
-    const openAiResponse = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1",
-        tools: [{ type: "web_search_preview" }],
-        tool_choice: "auto",
-        text: {
-          format: {
-            type: "json_schema",
-            name: "review_research",
-            schema: outputSchema,
-            strict: true,
-          },
+    const responseData = await callResponsesApi({
+      model: "gpt-4.1",
+      tools: [{ type: "web_search_preview" }],
+      tool_choice: "auto",
+      text: {
+        format: {
+          type: "json_schema",
+          name: "review_research",
+          schema: outputSchema,
+          strict: true,
         },
-        input: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  "Ты маркетинговый исследователь. Ищи только открытые веб-источники с реальными формулировками людей. Верни ровно 10 отзывов или сообщений. В поле quote переноси фрагмент в исходной формулировке автора без перефразирования. Не выдумывай данные и не используй источники без прямой цитаты. Для каждого отзыва заполни проблему, оправдания, страхи, желаемый результат и вопросы на основе самой цитаты и контекста страницы. В sourceLabel дай короткое название площадки и материала. В sourceUrl дай прямую ссылку.",
-              },
-            ],
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: `Ниша: ${niche}\nПозиционирование эксперта: ${positioning}\n\nНайди 10 релевантных отзывов или публичных сообщений людей, которые соответствуют этой нише и запросу.`,
-              },
-            ],
-          },
-        ],
-      }),
+      },
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: systemPrompt,
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: buildUserPrompt(niche, positioning),
+            },
+          ],
+        },
+      ],
     });
 
-    if (!openAiResponse.ok) {
-      const errorText = await openAiResponse.text();
-
-      return Response.json(
-        {
-          error: `OpenAI API вернул ошибку: ${errorText}`,
-        },
-        { status: 502 },
-      );
-    }
-
-    const responseData = (await openAiResponse.json()) as OpenAIResponse;
     const responseText = extractResponseText(responseData);
 
     if (!responseText) {
@@ -195,18 +289,14 @@ export async function POST(request: Request) {
     try {
       parsedJson = JSON.parse(responseText);
     } catch {
-      return Response.json(
-        {
-          error: `Модель вернула не JSON. Фрагмент ответа: ${responseText.slice(0, 400)}`,
-        },
-        { status: 502 },
-      );
+      parsedJson = await repairMalformedJson(responseText);
     }
 
     if (!isReviewsPayload(parsedJson)) {
       return Response.json(
         {
-          error: `Ответ модели прочитан, но структура не совпала с ожидаемой. Фрагмент ответа: ${responseText.slice(0, 400)}`,
+          error:
+            "Ответ модели прочитан, но структура не совпала с ожидаемой. Проверьте, что модель вернула 10 записей и в каждой колонке есть полноценные прямые цитаты людей.",
         },
         { status: 502 },
       );

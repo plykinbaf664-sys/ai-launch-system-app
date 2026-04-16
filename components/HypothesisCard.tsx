@@ -6,18 +6,34 @@ type ReviewRow = {
   id: string;
   sourceLabel: string;
   sourceUrl: string;
-  quote: string;
   problem: string;
-  excuses: string;
+  whyNoResult: string;
   fears: string;
   desiredResult: string;
-  questions: string;
+  question: string;
 };
 
 type ReviewsResponse = {
   niche: string;
   positioning: string;
   reviews: ReviewRow[];
+};
+
+const tableHeaders = [
+  "Источник",
+  "Проблема",
+  "Почему до сих пор нет результата",
+  "Страхи",
+  "Желаемый результат",
+  "Вопрос при покупке",
+];
+
+const cellStyle = {
+  border: "1px solid #d1d5db",
+  padding: "12px",
+  verticalAlign: "top" as const,
+  whiteSpace: "pre-wrap" as const,
+  lineHeight: 1.6,
 };
 
 function escapeCsvValue(value: string) {
@@ -75,27 +91,17 @@ export default function HypothesisCard() {
       return;
     }
 
-    const headers = [
-      "Источник",
-      "Ссылка",
-      "Отзыв",
-      "Проблема",
-      "Почему до сих пор нет результата",
-      "Страхи",
-      "Желаемый результат",
-      "Вопросы",
-    ];
+    const headers = ["Источник", "Ссылка", ...tableHeaders.slice(1)];
 
     const rows = reviews.map((review) =>
       [
         review.sourceLabel,
         review.sourceUrl,
-        review.quote,
         review.problem,
-        review.excuses,
+        review.whyNoResult,
         review.fears,
         review.desiredResult,
-        review.questions,
+        review.question,
       ]
         .map(escapeCsvValue)
         .join(","),
@@ -127,10 +133,10 @@ export default function HypothesisCard() {
       }}
     >
       <div>
-        <h2 style={{ margin: 0, fontSize: "24px" }}>Сбор отзывов по нише</h2>
+        <h2 style={{ margin: 0, fontSize: "24px" }}>Сбор живых цитат по нише</h2>
         <p style={{ marginTop: "8px", marginBottom: 0, color: "#4b5563", lineHeight: 1.5 }}>
-          Введите нишу и позиционирование эксперта. Система соберет 10 отзывов из открытых
-          источников, разложит их по критериям и подготовит таблицу для скачивания.
+          Введите нишу и позиционирование эксперта. Система соберёт 10 живых источников и заполнит
+          колонки прямыми цитатами людей без додумывания со стороны модели.
         </p>
       </div>
 
@@ -140,7 +146,7 @@ export default function HypothesisCard() {
           <input
             value={niche}
             onChange={(event) => setNiche(event.target.value)}
-            placeholder="Например: психология, фитнес, продюсирование"
+            placeholder="Например: онлайн-фитнес для женщин 35+, подготовка к IELTS, психолог после развода"
             required
             style={{
               border: "1px solid #d1d5db",
@@ -156,7 +162,7 @@ export default function HypothesisCard() {
           <textarea
             value={positioning}
             onChange={(event) => setPositioning(event.target.value)}
-            placeholder="Например: помогаю женщинам после расставания вернуть опору и выйти в новые отношения"
+            placeholder="Например: помогаю женщинам после развода вернуть опору, снизить тревогу и мягко выйти в новые отношения без самообмана"
             required
             rows={4}
             style={{
@@ -184,7 +190,7 @@ export default function HypothesisCard() {
               fontWeight: 600,
             }}
           >
-            {isLoading ? "Собираю отзывы..." : "Собрать 10 отзывов"}
+            {isLoading ? "Собираю живые цитаты..." : "Собрать 10 источников"}
           </button>
 
           <button
@@ -240,7 +246,7 @@ export default function HypothesisCard() {
             <strong>Позиционирование:</strong> {lastSearch.positioning}
           </p>
           <p style={{ margin: 0 }}>
-            <strong>Найдено отзывов:</strong> {reviews.length}
+            <strong>Найдено источников:</strong> {reviews.length}
           </p>
         </div>
       ) : null}
@@ -256,15 +262,7 @@ export default function HypothesisCard() {
           >
             <thead>
               <tr style={{ backgroundColor: "#f3f4f6" }}>
-                {[
-                  "Источник",
-                  "Отзыв",
-                  "Проблема",
-                  "Почему до сих пор нет результата",
-                  "Страхи",
-                  "Желаемый результат",
-                  "Вопросы",
-                ].map((title) => (
+                {tableHeaders.map((title) => (
                   <th
                     key={title}
                     style={{
@@ -282,29 +280,16 @@ export default function HypothesisCard() {
             <tbody>
               {reviews.map((review) => (
                 <tr key={review.id}>
-                  <td style={{ border: "1px solid #d1d5db", padding: "12px", verticalAlign: "top" }}>
+                  <td style={cellStyle}>
                     <a href={review.sourceUrl} target="_blank" rel="noreferrer">
                       {review.sourceLabel}
                     </a>
                   </td>
-                  <td style={{ border: "1px solid #d1d5db", padding: "12px", verticalAlign: "top" }}>
-                    {review.quote}
-                  </td>
-                  <td style={{ border: "1px solid #d1d5db", padding: "12px", verticalAlign: "top" }}>
-                    {review.problem}
-                  </td>
-                  <td style={{ border: "1px solid #d1d5db", padding: "12px", verticalAlign: "top" }}>
-                    {review.excuses}
-                  </td>
-                  <td style={{ border: "1px solid #d1d5db", padding: "12px", verticalAlign: "top" }}>
-                    {review.fears}
-                  </td>
-                  <td style={{ border: "1px solid #d1d5db", padding: "12px", verticalAlign: "top" }}>
-                    {review.desiredResult}
-                  </td>
-                  <td style={{ border: "1px solid #d1d5db", padding: "12px", verticalAlign: "top" }}>
-                    {review.questions}
-                  </td>
+                  <td style={cellStyle}>{review.problem}</td>
+                  <td style={cellStyle}>{review.whyNoResult}</td>
+                  <td style={cellStyle}>{review.fears}</td>
+                  <td style={cellStyle}>{review.desiredResult}</td>
+                  <td style={cellStyle}>{review.question}</td>
                 </tr>
               ))}
             </tbody>
