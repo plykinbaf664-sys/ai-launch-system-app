@@ -1,0 +1,15 @@
+
+> ai-launch-system-app@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.2 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.8.1.1:3000
+- Environments: .env.local
+✓ Ready in 1222ms
+
+ GET /research 200 in 762ms (next.js: 394ms, application-code: 368ms)
+ POST /api/telegram/webhook 500 in 1744ms (next.js: 722ms, application-code: 1022ms)
+ POST /api/telegram/webhook 500 in 4.2s (next.js: 53ms, application-code: 4.1s)
+ POST /api/telegram/webhook 500 in 920ms (next.js: 62ms, application-code: 858ms)
+[?25h
