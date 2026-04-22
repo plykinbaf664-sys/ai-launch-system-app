@@ -1,10 +1,16 @@
 import {
   createLead,
+  getActiveExpertFaq,
+  getActiveExpertObjections,
+  getActiveExpertOffers,
   getActiveExpertProfile,
   getLeadByTelegramUserId,
+  getRecentMessagesByLeadId,
   insertMessage,
   updateLeadById,
 } from "@/lib/supabase-rest";
+import { buildNeiroPrompt } from "@/lib/neiroclozer/prompt-builder";
+import { generateNeiroReply } from "@/lib/neiroclozer/generate-reply";
 import {
   parseTelegramPrivateTextMessage,
   sendTextMessage,
@@ -15,6 +21,106 @@ function buildGiftText(giftMessage: string, giftUrl: string) {
   return `${giftMessage}\n\n${giftUrl}`;
 }
 
+function hasAnyKeyword(text: string, keywords: string[]) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function detectMatchedOffer(text: string) {
+  if (
+    hasAnyKeyword(text, [
+      "сделайте под ключ",
+      "соберите мне",
+      "хочу готовую систему",
+      "нужно внедрение",
+    ])
+  ) {
+    return "done_for_you";
+  }
+
+  if (
+    hasAnyKeyword(text, [
+      "нужна консультация",
+      "нужен совет",
+      "хочу понять направление",
+    ])
+  ) {
+    return "consulting";
+  }
+
+  if (
+    hasAnyKeyword(text, [
+      "хочу понять",
+      "не понимаю, что делать",
+      "нужен разбор",
+      "хочу разобраться",
+    ])
+  ) {
+    return "diagnostic";
+  }
+
+  return null;
+}
+
+function needsManualFollowup(text: string) {
+  return hasAnyKeyword(text, [
+    "созвон",
+    "ручной разбор",
+    "обсудить внедрение",
+    "готов обсуждать внедрение",
+    "как начать работу",
+    "начать работу лично",
+  ]);
+}
+
+function detectWarmthLevel(text: string, matchedOffer: string | null, manualFollowup: boolean) {
+  if (
+    manualFollowup ||
+    hasAnyKeyword(text, [
+      "стоимость",
+      "цена",
+      "сколько стоит",
+      "сроки",
+      "как начать",
+      "подключение",
+      "внедрение",
+    ])
+  ) {
+    return "hot";
+  }
+
+  if (
+    matchedOffer ||
+    text.length > 40 ||
+    hasAnyKeyword(text, [
+      "формат",
+      "процесс",
+      "как это работает",
+      "моя ситуация",
+      "у меня",
+    ])
+  ) {
+    return "warm";
+  }
+
+  return "cold";
+}
+
+function detectLeadStatus(isNewLead: boolean, matchedOffer: string | null, warmthLevel: string, manualFollowup: boolean) {
+  if (manualFollowup) {
+    return "needs_manual_followup";
+  }
+
+  if (matchedOffer && warmthLevel !== "cold") {
+    return "qualified";
+  }
+
+  if (isNewLead) {
+    return "new";
+  }
+
+  return "active";
+}
+
 export async function POST(request: Request) {
   try {
     const isSecretValid = await verifyTelegramWebhookSecret(request);
@@ -23,7 +129,7 @@ export async function POST(request: Request) {
       return Response.json({ ok: false, error: "Invalid Telegram webhook secret." }, { status: 401 });
     }
 
-    const update = (await request.json()) as { message?: unknown };
+    const update = (await request.json()) as Parameters<typeof parseTelegramPrivateTextMessage>[0];
 
     const incomingMessage = parseTelegramPrivateTextMessage(update);
 
@@ -39,6 +145,11 @@ export async function POST(request: Request) {
 
     const existingLead = await getLeadByTelegramUserId(incomingMessage.telegramUserId);
     const isNewLead = !existingLead;
+    const normalizedUserText = incomingMessage.text.toLowerCase();
+    const matchedOffer = detectMatchedOffer(normalizedUserText) ?? existingLead?.matched_offer ?? null;
+    const manualFollowup = needsManualFollowup(normalizedUserText);
+    const warmthLevel = detectWarmthLevel(normalizedUserText, matchedOffer, manualFollowup);
+    const leadStatus = detectLeadStatus(isNewLead, matchedOffer, warmthLevel, manualFollowup);
     const lead =
       existingLead ??
       (await createLead({
@@ -49,19 +160,26 @@ export async function POST(request: Request) {
         firstName: incomingMessage.firstName,
         lastName: incomingMessage.lastName,
         source: "telegram",
-        status: "active",
+        status: leadStatus,
         currentStage: "awaiting_first_answer",
+        matchedOffer,
+        lastUserMessage: incomingMessage.text,
+        warmthLevel,
       }));
 
-    await updateLeadById(lead.id, {
-      expertProfileId: expertProfile.id,
-      telegramChatId: incomingMessage.telegramChatId,
-      telegramUsername: incomingMessage.telegramUsername,
-      firstName: incomingMessage.firstName,
-      lastName: incomingMessage.lastName,
-      source: "telegram",
-      status: "active",
-    });
+    const updatedLead =
+      (await updateLeadById(lead.id, {
+        expertProfileId: expertProfile.id,
+        telegramChatId: incomingMessage.telegramChatId,
+        telegramUsername: incomingMessage.telegramUsername,
+        firstName: incomingMessage.firstName,
+        lastName: incomingMessage.lastName,
+        source: "telegram",
+        status: leadStatus,
+        matchedOffer,
+        lastUserMessage: incomingMessage.text,
+        warmthLevel,
+      })) ?? lead;
 
     await insertMessage({
       leadId: lead.id,
@@ -110,11 +228,31 @@ export async function POST(request: Request) {
         text: expertProfile.first_qual_question,
         messageType: "qual_question",
       });
+    } else {
+      const [offers, faq, objections, messages] = await Promise.all([
+        getActiveExpertOffers(expertProfile.id),
+        getActiveExpertFaq(expertProfile.id),
+        getActiveExpertObjections(expertProfile.id),
+        getRecentMessagesByLeadId(lead.id, 10),
+      ]);
+
+      const prompt = buildNeiroPrompt({
+        expert: expertProfile,
+        offers,
+        faq,
+        objections,
+        lead: updatedLead,
+        messages,
+      });
+      const reply = await generateNeiroReply(prompt);
+
+      await sendTextMessage(incomingMessage.telegramChatId, reply);
     }
 
     return Response.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown webhook error.";
+    console.error("Telegram webhook error:", message);
     return Response.json({ ok: false, error: message }, { status: 500 });
   }
 }

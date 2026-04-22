@@ -9,6 +9,9 @@ type SupabaseLeadRow = {
   source: string;
   status: string;
   current_stage: string;
+  matched_offer: string | null;
+  last_user_message: string | null;
+  warmth_level: string;
   created_at: string;
   updated_at: string;
 };
@@ -17,6 +20,12 @@ type SupabaseExpertProfileRow = {
   id: string;
   is_active: boolean;
   expert_name: string;
+  brand_name: string | null;
+  role_description: string | null;
+  core_positioning: string | null;
+  target_audience: string | null;
+  communication_rules: string | null;
+  do_not_say_rules: string | null;
   welcome_message: string;
   gift_message: string;
   gift_type: "link";
@@ -24,6 +33,52 @@ type SupabaseExpertProfileRow = {
   first_qual_question: string;
   created_at: string;
   updated_at: string;
+};
+
+type SupabaseExpertOfferRow = {
+  id: string;
+  expert_profile_id: string;
+  title: string;
+  description: string | null;
+  price_text: string | null;
+  cta_text: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type SupabaseExpertFaqRow = {
+  id: string;
+  expert_profile_id: string;
+  question: string;
+  answer: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type SupabaseExpertObjectionRow = {
+  id: string;
+  expert_profile_id: string;
+  objection: string;
+  response: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type SupabaseMessageRow = {
+  id: string;
+  lead_id: string;
+  expert_profile_id: string | null;
+  direction: "incoming" | "outgoing";
+  channel: "telegram";
+  telegram_message_id: number | null;
+  text: string;
+  message_type: "user" | "welcome" | "gift" | "qual_question";
+  created_at: string;
 };
 
 type LeadUpsertInput = {
@@ -36,6 +91,9 @@ type LeadUpsertInput = {
   source: string;
   status: string;
   currentStage: string;
+  matchedOffer: string | null;
+  lastUserMessage: string | null;
+  warmthLevel: string;
 };
 
 type MessageInsertInput = {
@@ -105,12 +163,36 @@ export async function getActiveExpertProfile() {
   return rows[0] ?? null;
 }
 
+export async function getActiveExpertOffers(expertProfileId: string) {
+  return supabaseRequest<SupabaseExpertOfferRow[]>(
+    `expert_offers?select=*&expert_profile_id=eq.${encodeURIComponent(expertProfileId)}&is_active=eq.true&order=created_at.asc`,
+  );
+}
+
+export async function getActiveExpertFaq(expertProfileId: string) {
+  return supabaseRequest<SupabaseExpertFaqRow[]>(
+    `expert_faq?select=*&expert_profile_id=eq.${encodeURIComponent(expertProfileId)}&is_active=eq.true&order=sort_order.asc,created_at.asc`,
+  );
+}
+
+export async function getActiveExpertObjections(expertProfileId: string) {
+  return supabaseRequest<SupabaseExpertObjectionRow[]>(
+    `expert_objections?select=*&expert_profile_id=eq.${encodeURIComponent(expertProfileId)}&is_active=eq.true&order=sort_order.asc,created_at.asc`,
+  );
+}
+
 export async function getLeadByTelegramUserId(telegramUserId: number) {
   const rows = await supabaseRequest<SupabaseLeadRow[]>(
     `leads?select=*&telegram_user_id=eq.${telegramUserId}&limit=1`,
   );
 
   return rows[0] ?? null;
+}
+
+export async function getRecentMessagesByLeadId(leadId: string, limit = 10) {
+  return supabaseRequest<SupabaseMessageRow[]>(
+    `messages?select=*&lead_id=eq.${encodeURIComponent(leadId)}&order=created_at.desc&limit=${limit}`,
+  );
 }
 
 export async function createLead(input: LeadUpsertInput) {
@@ -130,6 +212,9 @@ export async function createLead(input: LeadUpsertInput) {
         source: input.source,
         status: input.status,
         current_stage: input.currentStage,
+        matched_offer: input.matchedOffer,
+        last_user_message: input.lastUserMessage,
+        warmth_level: input.warmthLevel,
       },
     ]),
   });
@@ -164,6 +249,15 @@ export async function updateLeadById(leadId: string, input: Partial<LeadUpsertIn
   if (input.currentStage !== undefined) {
     payload.current_stage = input.currentStage;
   }
+  if (input.matchedOffer !== undefined) {
+    payload.matched_offer = input.matchedOffer;
+  }
+  if (input.lastUserMessage !== undefined) {
+    payload.last_user_message = input.lastUserMessage;
+  }
+  if (input.warmthLevel !== undefined) {
+    payload.warmth_level = input.warmthLevel;
+  }
 
   const rows = await supabaseRequest<SupabaseLeadRow[]>(`leads?id=eq.${encodeURIComponent(leadId)}`, {
     method: "PATCH",
@@ -196,4 +290,11 @@ export async function insertMessage(input: MessageInsertInput) {
   });
 }
 
-export type { SupabaseExpertProfileRow, SupabaseLeadRow };
+export type {
+  SupabaseExpertFaqRow,
+  SupabaseExpertObjectionRow,
+  SupabaseExpertOfferRow,
+  SupabaseExpertProfileRow,
+  SupabaseLeadRow,
+  SupabaseMessageRow,
+};
