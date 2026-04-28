@@ -4,7 +4,6 @@ import {
   getActiveExpertObjections,
   getActiveExpertOffers,
   getActiveExpertProfile,
-  getLeadById,
   getLeadByTelegramUserId,
   getRecentMessagesByLeadId,
   insertMessage,
@@ -23,7 +22,6 @@ function buildGiftText(giftMessage: string, giftUrl: string) {
 }
 
 const GIFT_FOLLOWUP_DELAY_MS = 15 * 60 * 1000;
-const GIFT_FOLLOWUP_TEXT = "Получилось посмотреть видео?";
 
 function getPublicBaseUrl(request: Request) {
   const envBaseUrl =
@@ -52,36 +50,24 @@ function buildTrackedGiftUrl(request: Request, leadId: string, giftUrl: string) 
   return trackedUrl.toString();
 }
 
-function scheduleGiftFollowup(leadId: string, chatId: number, expertProfileId: string) {
-  setTimeout(async () => {
-    try {
-      const lead = await getLeadById(leadId);
+function getCalendarLink() {
+  return process.env.CALENDAR_LINK || "https://calendar.app.google/rpFMG61ce4dXL54z5";
+}
 
-      if (!lead || lead.gift_link_clicked_at || lead.gift_followup_sent_at) {
-        return;
-      }
+function getBookedStage(matchedOffer: string | null, currentStage: string) {
+  if (currentStage === "awaiting_expert_call") {
+    return "expert_call_confirmed";
+  }
 
-      const followupResult = await sendTextMessage(chatId, GIFT_FOLLOWUP_TEXT);
+  if (matchedOffer === "consulting") {
+    return "consulting_booked";
+  }
 
-      await insertMessage({
-        leadId,
-        expertProfileId,
-        direction: "outgoing",
-        channel: "telegram",
-        telegramMessageId: followupResult.telegramMessageId,
-        text: GIFT_FOLLOWUP_TEXT,
-        messageType: "gift_followup",
-      });
+  if (matchedOffer === "done_for_you") {
+    return "done_for_you_booked";
+  }
 
-      await updateLeadById(leadId, {
-        giftFollowupSentAt: new Date().toISOString(),
-        currentStage: "gift_followup_sent",
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown gift followup error.";
-      console.error("Gift followup error:", message);
-    }
-  }, GIFT_FOLLOWUP_DELAY_MS);
+  return "diagnostic_booked";
 }
 
 function hasAnyKeyword(text: string, keywords: string[]) {
@@ -400,8 +386,6 @@ export async function POST(request: Request) {
         currentStage: "gift_sent",
       });
 
-      scheduleGiftFollowup(lead.id, incomingMessage.telegramChatId, expertProfile.id);
-
       const questionResult = await sendTextMessage(
         incomingMessage.telegramChatId,
         expertProfile.first_qual_question,
@@ -436,8 +420,23 @@ export async function POST(request: Request) {
         messages,
       });
       const reply = await generateNeiroReply(prompt);
+      const replyResult = await sendTextMessage(incomingMessage.telegramChatId, reply);
 
-      await sendTextMessage(incomingMessage.telegramChatId, reply);
+      await insertMessage({
+        leadId: lead.id,
+        expertProfileId: expertProfile.id,
+        direction: "outgoing",
+        channel: "telegram",
+        telegramMessageId: replyResult.telegramMessageId,
+        text: reply,
+        messageType: "ai_reply",
+      });
+
+      if (reply.includes(getCalendarLink())) {
+        await updateLeadById(lead.id, {
+          currentStage: getBookedStage(updatedLead.matched_offer, updatedLead.current_stage),
+        });
+      }
     }
 
     return Response.json({ ok: true });

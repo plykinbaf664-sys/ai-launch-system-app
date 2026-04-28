@@ -19,7 +19,9 @@ type BuildNeiroPromptParams = {
 const MAX_SECTION_LENGTH = 320;
 const MAX_MESSAGE_LENGTH = 220;
 const MAX_ITEMS_PER_SECTION = 3;
-const CALENDAR_LINK = "https://calendar.app.google/rpFMG61ce4dXL54z5";
+function getCalendarLink() {
+  return process.env.CALENDAR_LINK || "https://calendar.app.google/rpFMG61ce4dXL54z5";
+}
 
 function valueOrFallback(value: string | null | undefined, fallback = "Не указано") {
   return value?.trim() || fallback;
@@ -91,6 +93,7 @@ function formatMessages(messages: SupabaseMessageRow[]) {
 
 export function buildNeiroPrompt(params: BuildNeiroPromptParams) {
   const { expert, offers, faq, objections, lead, messages } = params;
+  const calendarLink = getCalendarLink();
 
   return [
     "ROLE: AI-ассистент отдела продаж. Ты не эксперт.",
@@ -106,7 +109,8 @@ export function buildNeiroPrompt(params: BuildNeiroPromptParams) {
     "- не перечисляй все офферы сразу.",
     "- если данных хватает, не задавай лишние вопросы.",
     "- если клиент уже согласился на диагностику или созвон, не переспрашивай.",
-    `- при согласии сразу дай ссылку на календарь: ${CALENDAR_LINK}`,
+    `- при согласии сразу дай ссылку на календарь: ${calendarLink}`,
+    `- если ссылка на календарь уже была отправлена раньше или stage уже booked/confirmed, не отправляй ${calendarLink} повторно. Дальше отвечай только по текущему контексту диалога.`,
     "- если сообщение клиента похоже на 'да', 'ок', 'хорошо', 'давайте', 'готов', 'подходит' после предложения диагностики/созвона, это согласие.",
     "- если клиент спрашивает про видео, подарок, ссылку, пишет что не видит видео или просит продублировать доступ, сразу повторно отправь ссылку на видео.",
     "- не говори, что ты не видишь ссылку или не знаешь, о каком видео речь.",
@@ -132,7 +136,7 @@ export function buildNeiroPrompt(params: BuildNeiroPromptParams) {
     `COMMUNICATION: ${truncateText(expert.communication_rules, MAX_SECTION_LENGTH)}`,
     `DO_NOT_SAY: ${truncateText(expert.do_not_say_rules, MAX_SECTION_LENGTH)}`,
     `GIFT: ${truncateText(expert.gift_message, 120)} | video_link: ${expert.gift_url}`,
-    `LEAD: status=${lead.status}; warmth=${lead.warmth_level}; matched_offer=${valueOrFallback(lead.matched_offer, "unknown")}; last_message=${truncateText(lead.last_user_message, 160, "none")}`,
+    `LEAD: status=${lead.status}; stage=${lead.current_stage}; warmth=${lead.warmth_level}; matched_offer=${valueOrFallback(lead.matched_offer, "unknown")}; last_message=${truncateText(lead.last_user_message, 160, "none")}`,
     "OFFERS:",
     formatOffers(offers),
     "FAQ:",

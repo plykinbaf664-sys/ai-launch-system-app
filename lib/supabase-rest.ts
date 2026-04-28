@@ -80,7 +80,7 @@ type SupabaseMessageRow = {
   channel: "telegram";
   telegram_message_id: number | null;
   text: string;
-  message_type: "user" | "welcome" | "gift" | "qual_question";
+  message_type: "user" | "welcome" | "gift" | "qual_question" | "gift_followup" | "ai_reply";
   created_at: string;
 };
 
@@ -109,7 +109,7 @@ type MessageInsertInput = {
   channel: "telegram";
   telegramMessageId: number | null;
   text: string;
-  messageType: "user" | "welcome" | "gift" | "qual_question" | "gift_followup";
+  messageType: "user" | "welcome" | "gift" | "qual_question" | "gift_followup" | "ai_reply";
 };
 
 function getSupabaseConfig() {
@@ -201,6 +201,12 @@ export async function getLeadById(leadId: string) {
   );
 
   return rows[0] ?? null;
+}
+
+export async function getDueGiftFollowupLeads(nowIso: string, limit = 20) {
+  return supabaseRequest<SupabaseLeadRow[]>(
+    `leads?select=*&gift_followup_due_at=lte.${encodeURIComponent(nowIso)}&gift_link_clicked_at=is.null&gift_followup_sent_at=is.null&order=gift_followup_due_at.asc&limit=${limit}`,
+  );
 }
 
 export async function getRecentMessagesByLeadId(leadId: string, limit = 10) {

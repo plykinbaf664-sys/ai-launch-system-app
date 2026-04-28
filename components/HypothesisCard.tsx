@@ -19,13 +19,17 @@ type ReviewsResponse = {
   reviews: ReviewRow[];
 };
 
+type ReviewsErrorResponse = {
+  error?: string;
+};
+
 const tableHeaders = [
-  "Источник",
-  "Проблема",
-  "Почему до сих пор нет результата",
-  "Страхи",
-  "Желаемый результат",
-  "Вопрос при покупке",
+  "РСЃС‚РѕС‡РЅРёРє",
+  "РџСЂРѕР±Р»РµРјР°",
+  "РџРѕС‡РµРјСѓ РґРѕ СЃРёС… РїРѕСЂ РЅРµС‚ СЂРµР·СѓР»СЊС‚Р°С‚Р°",
+  "РЎС‚СЂР°С…Рё",
+  "Р–РµР»Р°РµРјС‹Р№ СЂРµР·СѓР»СЊС‚Р°С‚",
+  "Р’РѕРїСЂРѕСЃ РїСЂРё РїРѕРєСѓРїРєРµ",
 ];
 
 const cellStyle = {
@@ -65,10 +69,11 @@ export default function HypothesisCard() {
         }),
       });
 
-      const data = (await response.json()) as ReviewsResponse | { error?: string };
+      const data = (await response.json()) as ReviewsResponse | ReviewsErrorResponse;
 
       if (!response.ok || !("reviews" in data)) {
-        throw new Error(data.error || "Не удалось собрать отзывы.");
+        const errorMessage = "error" in data ? data.error : undefined;
+        throw new Error(errorMessage || "РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР±СЂР°С‚СЊ РѕС‚Р·С‹РІС‹.");
       }
 
       setReviews(data.reviews);
@@ -78,7 +83,7 @@ export default function HypothesisCard() {
       });
     } catch (submitError) {
       const message =
-        submitError instanceof Error ? submitError.message : "Произошла ошибка при сборе отзывов.";
+        submitError instanceof Error ? submitError.message : "РџСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР° РїСЂРё СЃР±РѕСЂРµ РѕС‚Р·С‹РІРѕРІ.";
       setError(message);
       setReviews([]);
     } finally {
@@ -91,7 +96,7 @@ export default function HypothesisCard() {
       return;
     }
 
-    const headers = ["Источник", "Ссылка", ...tableHeaders.slice(1)];
+    const headers = ["РСЃС‚РѕС‡РЅРёРє", "РЎСЃС‹Р»РєР°", ...tableHeaders.slice(1)];
 
     const rows = reviews.map((review) =>
       [
@@ -133,20 +138,20 @@ export default function HypothesisCard() {
       }}
     >
       <div>
-        <h2 style={{ margin: 0, fontSize: "24px" }}>Сбор живых цитат по нише</h2>
+        <h2 style={{ margin: 0, fontSize: "24px" }}>РЎР±РѕСЂ Р¶РёРІС‹С… С†РёС‚Р°С‚ РїРѕ РЅРёС€Рµ</h2>
         <p style={{ marginTop: "8px", marginBottom: 0, color: "#4b5563", lineHeight: 1.5 }}>
-          Введите нишу и позиционирование эксперта. Система соберёт 10 живых источников и заполнит
-          колонки прямыми цитатами людей без додумывания со стороны модели.
+          Р’РІРµРґРёС‚Рµ РЅРёС€Сѓ Рё РїРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёРµ СЌРєСЃРїРµСЂС‚Р°. РЎРёСЃС‚РµРјР° СЃРѕР±РµСЂС‘С‚ 10 Р¶РёРІС‹С… РёСЃС‚РѕС‡РЅРёРєРѕРІ Рё Р·Р°РїРѕР»РЅРёС‚
+          РєРѕР»РѕРЅРєРё РїСЂСЏРјС‹РјРё С†РёС‚Р°С‚Р°РјРё Р»СЋРґРµР№ Р±РµР· РґРѕРґСѓРјС‹РІР°РЅРёСЏ СЃРѕ СЃС‚РѕСЂРѕРЅС‹ РјРѕРґРµР»Рё.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: "16px" }}>
         <label style={{ display: "grid", gap: "8px" }}>
-          <span style={{ fontWeight: 600 }}>Ниша</span>
+          <span style={{ fontWeight: 600 }}>РќРёС€Р°</span>
           <input
             value={niche}
             onChange={(event) => setNiche(event.target.value)}
-            placeholder="Например: онлайн-фитнес для женщин 35+, подготовка к IELTS, психолог после развода"
+            placeholder="РќР°РїСЂРёРјРµСЂ: РѕРЅР»Р°Р№РЅ-С„РёС‚РЅРµСЃ РґР»СЏ Р¶РµРЅС‰РёРЅ 35+, РїРѕРґРіРѕС‚РѕРІРєР° Рє IELTS, РїСЃРёС…РѕР»РѕРі РїРѕСЃР»Рµ СЂР°Р·РІРѕРґР°"
             required
             style={{
               border: "1px solid #d1d5db",
@@ -158,11 +163,11 @@ export default function HypothesisCard() {
         </label>
 
         <label style={{ display: "grid", gap: "8px" }}>
-          <span style={{ fontWeight: 600 }}>Позиционирование эксперта</span>
+          <span style={{ fontWeight: 600 }}>РџРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёРµ СЌРєСЃРїРµСЂС‚Р°</span>
           <textarea
             value={positioning}
             onChange={(event) => setPositioning(event.target.value)}
-            placeholder="Например: помогаю женщинам после развода вернуть опору, снизить тревогу и мягко выйти в новые отношения без самообмана"
+            placeholder="РќР°РїСЂРёРјРµСЂ: РїРѕРјРѕРіР°СЋ Р¶РµРЅС‰РёРЅР°Рј РїРѕСЃР»Рµ СЂР°Р·РІРѕРґР° РІРµСЂРЅСѓС‚СЊ РѕРїРѕСЂСѓ, СЃРЅРёР·РёС‚СЊ С‚СЂРµРІРѕРіСѓ Рё РјСЏРіРєРѕ РІС‹Р№С‚Рё РІ РЅРѕРІС‹Рµ РѕС‚РЅРѕС€РµРЅРёСЏ Р±РµР· СЃР°РјРѕРѕР±РјР°РЅР°"
             required
             rows={4}
             style={{
@@ -190,7 +195,7 @@ export default function HypothesisCard() {
               fontWeight: 600,
             }}
           >
-            {isLoading ? "Собираю живые цитаты..." : "Собрать 10 источников"}
+            {isLoading ? "РЎРѕР±РёСЂР°СЋ Р¶РёРІС‹Рµ С†РёС‚Р°С‚С‹..." : "РЎРѕР±СЂР°С‚СЊ 10 РёСЃС‚РѕС‡РЅРёРєРѕРІ"}
           </button>
 
           <button
@@ -208,7 +213,7 @@ export default function HypothesisCard() {
               fontWeight: 600,
             }}
           >
-            Скачать CSV
+            РЎРєР°С‡Р°С‚СЊ CSV
           </button>
         </div>
       </form>
@@ -240,13 +245,13 @@ export default function HypothesisCard() {
           }}
         >
           <p style={{ margin: 0 }}>
-            <strong>Ниша:</strong> {lastSearch.niche}
+            <strong>РќРёС€Р°:</strong> {lastSearch.niche}
           </p>
           <p style={{ margin: 0 }}>
-            <strong>Позиционирование:</strong> {lastSearch.positioning}
+            <strong>РџРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёРµ:</strong> {lastSearch.positioning}
           </p>
           <p style={{ margin: 0 }}>
-            <strong>Найдено источников:</strong> {reviews.length}
+            <strong>РќР°Р№РґРµРЅРѕ РёСЃС‚РѕС‡РЅРёРєРѕРІ:</strong> {reviews.length}
           </p>
         </div>
       ) : null}

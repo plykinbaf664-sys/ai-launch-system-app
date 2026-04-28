@@ -29,6 +29,7 @@ export async function GET(
   if (!lead.gift_link_clicked_at) {
     await updateLeadById(leadId, {
       giftLinkClickedAt: new Date().toISOString(),
+      giftFollowupDueAt: null,
       currentStage: "gift_viewed",
     });
   }
