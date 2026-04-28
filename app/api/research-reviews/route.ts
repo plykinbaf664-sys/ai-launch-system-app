@@ -9,19 +9,13 @@ type ReviewRow = {
   question: string;
 };
 
-type OpenAIContentItem = {
+type AnthropicContentItem = {
   type?: string;
   text?: string;
 };
 
-type OpenAIOutputItem = {
-  type?: string;
-  content?: OpenAIContentItem[];
-};
-
-type OpenAIResponse = {
-  output?: OpenAIOutputItem[];
-  output_text?: string;
+type AnthropicResponse = {
+  content?: AnthropicContentItem[];
 };
 
 type ReviewsPayload = {
@@ -30,63 +24,52 @@ type ReviewsPayload = {
   reviews: ReviewRow[];
 };
 
-const paragraphQuoteSchema = {
-  type: "string",
-  minLength: 120,
-} as const;
+const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
+const ANTHROPIC_API_VERSION = "2023-06-01";
+const RESEARCH_MAX_TOKENS = 1800;
+const REPAIR_MAX_TOKENS = 1200;
 
-const outputSchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    niche: { type: "string" },
-    positioning: { type: "string" },
-    reviews: {
-      type: "array",
-      minItems: 10,
-      maxItems: 10,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          id: { type: "string" },
-          sourceLabel: { type: "string" },
-          sourceUrl: { type: "string" },
-          problem: paragraphQuoteSchema,
-          whyNoResult: paragraphQuoteSchema,
-          fears: paragraphQuoteSchema,
-          desiredResult: paragraphQuoteSchema,
-          question: paragraphQuoteSchema,
-        },
-        required: [
-          "id",
-          "sourceLabel",
-          "sourceUrl",
-          "problem",
-          "whyNoResult",
-          "fears",
-          "desiredResult",
-          "question",
-        ],
-      },
-    },
-  },
-  required: ["niche", "positioning", "reviews"],
-} as const;
+const compactSchemaGuide = [
+  "{",
+  '  "niche": "string",',
+  '  "positioning": "string",',
+  '  "reviews": [',
+  "    {",
+  '      "id": "string",',
+  '      "sourceLabel": "string",',
+  '      "sourceUrl": "string",',
+  '      "problem": ">=120 chars direct first-person quote",',
+  '      "whyNoResult": ">=120 chars direct first-person quote",',
+  '      "fears": ">=120 chars direct first-person quote",',
+  '      "desiredResult": ">=120 chars direct first-person quote",',
+  '      "question": ">=120 chars direct first-person quote"',
+  "    }",
+  "  ]",
+  "}",
+].join("\n");
 
-function extractResponseText(responseData: OpenAIResponse) {
-  if (typeof responseData.output_text === "string" && responseData.output_text.trim()) {
-    return responseData.output_text.trim();
+function extractResponseText(responseData: AnthropicResponse) {
+  return (
+    responseData.content
+      ?.filter((item) => item.type === "text")
+      .map((item) => item.text?.trim())
+      .filter((item): item is string => Boolean(item))
+      .join("\n")
+      .trim() || ""
+  );
+}
+
+function normalizeJsonText(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed.startsWith("```")) {
+    return trimmed;
   }
 
-  const contentText = responseData.output
-    ?.flatMap((item) => item.content ?? [])
-    .map((item) => item.text?.trim())
-    .filter((item): item is string => Boolean(item))
-    .join("\n")
+  return trimmed
+    .replace(/^```[a-zA-Z0-9_-]*\s*/, "")
+    .replace(/\s*```$/, "")
     .trim();
-
-  return contentText || "";
 }
 
 function isLongString(value: unknown) {
@@ -128,54 +111,50 @@ function isReviewsPayload(value: unknown): value is ReviewsPayload {
   );
 }
 
-async function callResponsesApi(payload: object) {
-  const response = await fetch("https://api.openai.com/v1/responses", {
+async function callAnthropicApi(payload: object) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("Не найден ANTHROPIC_API_KEY.");
+  }
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "x-api-key": apiKey,
+      "anthropic-version": ANTHROPIC_API_VERSION,
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenAI API вернул ошибку: ${errorText}`);
+    throw new Error(`Anthropic API вернул ошибку: ${errorText}`);
   }
 
-  return (await response.json()) as OpenAIResponse;
+  return (await response.json()) as AnthropicResponse;
 }
 
-async function repairMalformedJson(responseText: string) {
-  const repairedResponse = await callResponsesApi({
-    model: "gpt-4.1",
-    text: {
-      format: {
-        type: "json_schema",
-        name: "review_research_repair",
-        schema: outputSchema,
-        strict: true,
-      },
-    },
-    input: [
-      {
-        role: "system",
-        content: [
-          {
-            type: "input_text",
-            text:
-              "You repair malformed JSON. Convert the provided text into valid JSON that matches the schema exactly. Do not add commentary. Preserve the content as-is whenever possible.",
-          },
-        ],
-      },
+async function repairMalformedJson(responseText: string, niche: string, positioning: string) {
+  const repairedResponse = await callAnthropicApi({
+    model: process.env.ANTHROPIC_MODEL || DEFAULT_ANTHROPIC_MODEL,
+    max_tokens: REPAIR_MAX_TOKENS,
+    system:
+      "Convert the text into one valid JSON object. Return only raw JSON with no markdown fences and no commentary.",
+    messages: [
       {
         role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: responseText,
-          },
-        ],
+        content: `Target fields:
+niche="${niche}"
+positioning="${positioning}"
+
+Return one JSON object with 10 reviews.
+Required keys in each review: id, sourceLabel, sourceUrl, problem, whyNoResult, fears, desiredResult, question.
+Each quote field must stay a direct first-person quote and be at least 120 characters.
+
+Malformed text:
+${responseText}`,
       },
     ],
   });
@@ -186,33 +165,42 @@ async function repairMalformedJson(responseText: string) {
     throw new Error("Не удалось восстановить JSON из ответа модели.");
   }
 
-  return JSON.parse(repairedText) as unknown;
+  return JSON.parse(normalizeJsonText(repairedText)) as unknown;
 }
 
-const systemPrompt =
-  "You are a marketing researcher. Search only open web sources with direct first-person user experience: forums, discussions, comments, reviews, Q&A threads, public posts, and complaint threads. Use only direct quotes from potential customers. Never use expert articles, educational materials, editorial summaries, journalist retellings, third-person case studies, company/app copy, landing pages, feature descriptions, or any informational site text. Never paraphrase, infer, summarize, normalize, or correct wording. Every non-source field must be a substantial first-person quote copied from the source as a full paragraph. Prefer fewer records over doubtful ones. Strict relevance test for every non-source cell: the quote must directly answer that exact column question, must fit only that column, and must not rely on guessed meaning. If a source has no direct quote for a column, leave the column empty or skip the source. Column rules: problem = current pain or unsatisfactory situation; whyNoResult = explicit reason progress is blocked or inconsistent; fears = explicit fear, worry, or risk; desiredResult = explicit wanted outcome or state; question = explicit buying-related question or hesitation before choosing, purchasing, or starting. Return only valid JSON.";
+const systemPrompt = [
+  "You are a marketing researcher.",
+  "Use only open web sources with direct first-person user experience.",
+  "Allowed sources: forums, discussions, comments, reviews, Q&A, public posts, complaint threads.",
+  "Do not use expert articles, company pages, educational materials, summaries, or paraphrases.",
+  "Every quote field must be copied from the source as a direct first-person quote.",
+  "If a source lacks a valid quote for a field, skip that source.",
+  "Return only raw JSON.",
+].join(" ");
 
 function buildUserPrompt(niche: string, positioning: string) {
   return `Ниша: ${niche}
-Позиционирование эксперта: ${positioning}
+Позиционирование: ${positioning}
 
-Найди релевантные живые источники и верни до 10 записей. Лучше вернуть меньше записей, чем подставить пересказ, экспертную статью или неавтентичную цитату.
+Найди до 10 живых источников. Лучше меньше записей, чем слабые или пересказанные цитаты.
 
-Колонки: sourceLabel, problem, whyNoResult, fears, desiredResult, question.
+Нужны поля:
+- sourceLabel
+- sourceUrl
+- problem
+- whyNoResult
+- fears
+- desiredResult
+- question
 
-Строгая проверка релевантности для каждой ячейки:
-1. Цитата прямо отвечает на вопрос этой колонки.
-2. Это дословные слова самого человека от первого лица.
-3. Смысл относится только к этой колонке, а не к соседней.
-4. Нет пересказа, догадки, расширения смысла или подстановки соседнего текста.
-5. Если хотя бы один пункт не выполняется, ячейка должна остаться пустой или источник должен быть пропущен.
+Правила:
+1. Только дословные цитаты от первого лица.
+2. Каждая цитата должна подходить только своей колонке.
+3. Никаких пересказов и додумывания.
+4. Для полей problem, whyNoResult, fears, desiredResult, question длина каждой цитаты минимум 120 символов.
 
-Семантика колонок:
-- problem: только текущая боль или неудовлетворяющая ситуация.
-- whyNoResult: только причина, почему до сих пор нет результата.
-- fears: только явный страх, тревога или риск.
-- desiredResult: только явный желаемый итог или состояние.
-- question: только вопрос или сомнение перед покупкой, выбором или стартом решения.`;
+Верни raw JSON без markdown fences по такой форме:
+${compactSchemaGuide}`;
 }
 
 export async function POST(request: Request) {
@@ -228,46 +216,25 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!process.env.ANTHROPIC_API_KEY) {
       return Response.json(
         {
           error:
-            "Не найден OPENAI_API_KEY. Добавьте ключ в переменные окружения, чтобы включить сбор отзывов.",
+            "Не найден ANTHROPIC_API_KEY. Добавьте ключ в переменные окружения, чтобы включить сбор отзывов.",
         },
         { status: 500 },
       );
     }
 
-    const responseData = await callResponsesApi({
-      model: "gpt-4.1",
-      tools: [{ type: "web_search_preview" }],
-      tool_choice: "auto",
-      text: {
-        format: {
-          type: "json_schema",
-          name: "review_research",
-          schema: outputSchema,
-          strict: true,
-        },
-      },
-      input: [
-        {
-          role: "system",
-          content: [
-            {
-              type: "input_text",
-              text: systemPrompt,
-            },
-          ],
-        },
+    const responseData = await callAnthropicApi({
+      model: process.env.ANTHROPIC_MODEL || DEFAULT_ANTHROPIC_MODEL,
+      max_tokens: RESEARCH_MAX_TOKENS,
+      system: systemPrompt,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+      messages: [
         {
           role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: buildUserPrompt(niche, positioning),
-            },
-          ],
+          content: buildUserPrompt(niche, positioning),
         },
       ],
     });
@@ -278,7 +245,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error:
-            "Не удалось прочитать ответ модели. OpenAI вернул ответ без текстового блока в ожидаемом формате.",
+            "Не удалось прочитать ответ модели. Anthropic вернул ответ без текстового блока в ожидаемом формате.",
         },
         { status: 502 },
       );
@@ -287,9 +254,9 @@ export async function POST(request: Request) {
     let parsedJson: unknown;
 
     try {
-      parsedJson = JSON.parse(responseText);
+      parsedJson = JSON.parse(normalizeJsonText(responseText));
     } catch {
-      parsedJson = await repairMalformedJson(responseText);
+      parsedJson = await repairMalformedJson(responseText, niche, positioning);
     }
 
     if (!isReviewsPayload(parsedJson)) {

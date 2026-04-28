@@ -12,6 +12,9 @@ type SupabaseLeadRow = {
   matched_offer: string | null;
   last_user_message: string | null;
   warmth_level: string;
+  gift_link_clicked_at: string | null;
+  gift_followup_due_at: string | null;
+  gift_followup_sent_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -94,6 +97,9 @@ type LeadUpsertInput = {
   matchedOffer: string | null;
   lastUserMessage: string | null;
   warmthLevel: string;
+  giftLinkClickedAt?: string | null;
+  giftFollowupDueAt?: string | null;
+  giftFollowupSentAt?: string | null;
 };
 
 type MessageInsertInput = {
@@ -103,7 +109,7 @@ type MessageInsertInput = {
   channel: "telegram";
   telegramMessageId: number | null;
   text: string;
-  messageType: "user" | "welcome" | "gift" | "qual_question";
+  messageType: "user" | "welcome" | "gift" | "qual_question" | "gift_followup";
 };
 
 function getSupabaseConfig() {
@@ -189,6 +195,14 @@ export async function getLeadByTelegramUserId(telegramUserId: number) {
   return rows[0] ?? null;
 }
 
+export async function getLeadById(leadId: string) {
+  const rows = await supabaseRequest<SupabaseLeadRow[]>(
+    `leads?select=*&id=eq.${encodeURIComponent(leadId)}&limit=1`,
+  );
+
+  return rows[0] ?? null;
+}
+
 export async function getRecentMessagesByLeadId(leadId: string, limit = 10) {
   return supabaseRequest<SupabaseMessageRow[]>(
     `messages?select=*&lead_id=eq.${encodeURIComponent(leadId)}&order=created_at.desc&limit=${limit}`,
@@ -215,6 +229,9 @@ export async function createLead(input: LeadUpsertInput) {
         matched_offer: input.matchedOffer,
         last_user_message: input.lastUserMessage,
         warmth_level: input.warmthLevel,
+        gift_link_clicked_at: input.giftLinkClickedAt ?? null,
+        gift_followup_due_at: input.giftFollowupDueAt ?? null,
+        gift_followup_sent_at: input.giftFollowupSentAt ?? null,
       },
     ]),
   });
@@ -257,6 +274,15 @@ export async function updateLeadById(leadId: string, input: Partial<LeadUpsertIn
   }
   if (input.warmthLevel !== undefined) {
     payload.warmth_level = input.warmthLevel;
+  }
+  if (input.giftLinkClickedAt !== undefined) {
+    payload.gift_link_clicked_at = input.giftLinkClickedAt;
+  }
+  if (input.giftFollowupDueAt !== undefined) {
+    payload.gift_followup_due_at = input.giftFollowupDueAt;
+  }
+  if (input.giftFollowupSentAt !== undefined) {
+    payload.gift_followup_sent_at = input.giftFollowupSentAt;
   }
 
   const rows = await supabaseRequest<SupabaseLeadRow[]>(`leads?id=eq.${encodeURIComponent(leadId)}`, {

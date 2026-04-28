@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     getActiveExpertOffers(expert.id),
     getActiveExpertFaq(expert.id),
     getActiveExpertObjections(expert.id),
-    getRecentMessagesByLeadId(lead.id, 10),
+    getRecentMessagesByLeadId(lead.id, 4),
   ]);
 
   const prompt = buildNeiroPrompt({

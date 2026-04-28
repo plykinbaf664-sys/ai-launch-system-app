@@ -4,6 +4,7 @@ import {
   getActiveExpertObjections,
   getActiveExpertOffers,
   getActiveExpertProfile,
+  getLeadById,
   getLeadByTelegramUserId,
   getRecentMessagesByLeadId,
   insertMessage,
@@ -19,6 +20,68 @@ import {
 
 function buildGiftText(giftMessage: string, giftUrl: string) {
   return `${giftMessage}\n\n${giftUrl}`;
+}
+
+const GIFT_FOLLOWUP_DELAY_MS = 15 * 60 * 1000;
+const GIFT_FOLLOWUP_TEXT = "Получилось посмотреть видео?";
+
+function getPublicBaseUrl(request: Request) {
+  const envBaseUrl =
+    process.env.TELEGRAM_WEBHOOK_BASE_URL ||
+    process.env.PUBLIC_BASE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL;
+
+  if (envBaseUrl) {
+    return envBaseUrl.replace(/\/+$/, "");
+  }
+
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+
+  if (forwardedHost && forwardedProto) {
+    return `${forwardedProto}://${forwardedHost}`.replace(/\/+$/, "");
+  }
+
+  const url = new URL(request.url);
+  return `${url.protocol}//${url.host}`.replace(/\/+$/, "");
+}
+
+function buildTrackedGiftUrl(request: Request, leadId: string, giftUrl: string) {
+  const trackedUrl = new URL(`${getPublicBaseUrl(request)}/api/gift/${leadId}`);
+  trackedUrl.searchParams.set("redirect", giftUrl);
+  return trackedUrl.toString();
+}
+
+function scheduleGiftFollowup(leadId: string, chatId: number, expertProfileId: string) {
+  setTimeout(async () => {
+    try {
+      const lead = await getLeadById(leadId);
+
+      if (!lead || lead.gift_link_clicked_at || lead.gift_followup_sent_at) {
+        return;
+      }
+
+      const followupResult = await sendTextMessage(chatId, GIFT_FOLLOWUP_TEXT);
+
+      await insertMessage({
+        leadId,
+        expertProfileId,
+        direction: "outgoing",
+        channel: "telegram",
+        telegramMessageId: followupResult.telegramMessageId,
+        text: GIFT_FOLLOWUP_TEXT,
+        messageType: "gift_followup",
+      });
+
+      await updateLeadById(leadId, {
+        giftFollowupSentAt: new Date().toISOString(),
+        currentStage: "gift_followup_sent",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown gift followup error.";
+      console.error("Gift followup error:", message);
+    }
+  }, GIFT_FOLLOWUP_DELAY_MS);
 }
 
 function hasAnyKeyword(text: string, keywords: string[]) {
@@ -72,6 +135,37 @@ function needsManualFollowup(text: string) {
   ]);
 }
 
+function isShortPositiveReply(text: string) {
+  const normalized = text.trim().toLowerCase();
+  return [
+    "да",
+    "ага",
+    "ок",
+    "окей",
+    "хорошо",
+    "давайте",
+    "подходит",
+    "готов",
+    "согласен",
+    "согласна",
+  ].includes(normalized);
+}
+
+function hasBookedSignal(text: string) {
+  return hasAnyKeyword(text, [
+    "записался",
+    "записалась",
+    "забронировал",
+    "забронировала",
+    "выбрал слот",
+    "выбрала слот",
+    "назначил созвон",
+    "назначила созвон",
+    "взял слот",
+    "взяла слот",
+  ]);
+}
+
 function detectWarmthLevel(text: string, matchedOffer: string | null, manualFollowup: boolean) {
   if (
     manualFollowup ||
@@ -121,6 +215,72 @@ function detectLeadStatus(isNewLead: boolean, matchedOffer: string | null, warmt
   return "active";
 }
 
+function detectFinalMatchedOffer(
+  detectedMatchedOffer: string | null,
+  existingMatchedOffer: string | null | undefined,
+  hasBooked: boolean,
+) {
+  if (detectedMatchedOffer) {
+    return detectedMatchedOffer;
+  }
+
+  if (existingMatchedOffer) {
+    return existingMatchedOffer;
+  }
+
+  if (hasBooked) {
+    return "diagnostic";
+  }
+
+  return null;
+}
+
+function detectCurrentStage(
+  matchedOffer: string | null,
+  manualFollowup: boolean,
+  hasBooked: boolean,
+  hasPositiveReply: boolean,
+  existingStage: string | null | undefined,
+) {
+  if (hasBooked) {
+    if (manualFollowup) {
+      return "expert_call_booked";
+    }
+
+    if (matchedOffer === "consulting") {
+      return "consulting_booked";
+    }
+
+    if (matchedOffer === "done_for_you") {
+      return "done_for_you_booked";
+    }
+
+    return "diagnostic_booked";
+  }
+
+  if (hasPositiveReply && existingStage === "awaiting_expert_call") {
+    return "expert_call_confirmed";
+  }
+
+  if (manualFollowup) {
+    return "awaiting_expert_call";
+  }
+
+  if (matchedOffer === "done_for_you") {
+    return "qualified_done_for_you";
+  }
+
+  if (matchedOffer === "consulting") {
+    return "qualified_consulting";
+  }
+
+  if (matchedOffer === "diagnostic") {
+    return "qualified_diagnostic";
+  }
+
+  return existingStage || "qualification_in_progress";
+}
+
 export async function POST(request: Request) {
   try {
     const isSecretValid = await verifyTelegramWebhookSecret(request);
@@ -146,10 +306,26 @@ export async function POST(request: Request) {
     const existingLead = await getLeadByTelegramUserId(incomingMessage.telegramUserId);
     const isNewLead = !existingLead;
     const normalizedUserText = incomingMessage.text.toLowerCase();
-    const matchedOffer = detectMatchedOffer(normalizedUserText) ?? existingLead?.matched_offer ?? null;
+    const hasBooked = hasBookedSignal(normalizedUserText);
+    const hasPositiveReply = isShortPositiveReply(normalizedUserText);
+    const matchedOffer = detectFinalMatchedOffer(
+      detectMatchedOffer(normalizedUserText),
+      existingLead?.matched_offer,
+      hasBooked,
+    );
     const manualFollowup = needsManualFollowup(normalizedUserText);
     const warmthLevel = detectWarmthLevel(normalizedUserText, matchedOffer, manualFollowup);
-    const leadStatus = detectLeadStatus(isNewLead, matchedOffer, warmthLevel, manualFollowup);
+    const leadStatus =
+      hasBooked || (hasPositiveReply && (matchedOffer === "diagnostic" || manualFollowup))
+        ? "qualified"
+        : detectLeadStatus(isNewLead, matchedOffer, warmthLevel, manualFollowup);
+    const currentStage = detectCurrentStage(
+      matchedOffer,
+      manualFollowup,
+      hasBooked,
+      hasPositiveReply,
+      existingLead?.current_stage,
+    );
     const lead =
       existingLead ??
       (await createLead({
@@ -161,10 +337,13 @@ export async function POST(request: Request) {
         lastName: incomingMessage.lastName,
         source: "telegram",
         status: leadStatus,
-        currentStage: "awaiting_first_answer",
+        currentStage,
         matchedOffer,
         lastUserMessage: incomingMessage.text,
         warmthLevel,
+        giftLinkClickedAt: null,
+        giftFollowupDueAt: new Date(Date.now() + GIFT_FOLLOWUP_DELAY_MS).toISOString(),
+        giftFollowupSentAt: null,
       }));
 
     const updatedLead =
@@ -176,6 +355,7 @@ export async function POST(request: Request) {
         lastName: incomingMessage.lastName,
         source: "telegram",
         status: leadStatus,
+        currentStage,
         matchedOffer,
         lastUserMessage: incomingMessage.text,
         warmthLevel,
@@ -203,7 +383,8 @@ export async function POST(request: Request) {
         messageType: "welcome",
       });
 
-      const giftText = buildGiftText(expertProfile.gift_message, expertProfile.gift_url);
+      const trackedGiftUrl = buildTrackedGiftUrl(request, lead.id, expertProfile.gift_url);
+      const giftText = buildGiftText(expertProfile.gift_message, trackedGiftUrl);
       const giftResult = await sendTextMessage(incomingMessage.telegramChatId, giftText);
       await insertMessage({
         leadId: lead.id,
@@ -214,6 +395,12 @@ export async function POST(request: Request) {
         text: giftText,
         messageType: "gift",
       });
+
+      await updateLeadById(lead.id, {
+        currentStage: "gift_sent",
+      });
+
+      scheduleGiftFollowup(lead.id, incomingMessage.telegramChatId, expertProfile.id);
 
       const questionResult = await sendTextMessage(
         incomingMessage.telegramChatId,
@@ -228,12 +415,16 @@ export async function POST(request: Request) {
         text: expertProfile.first_qual_question,
         messageType: "qual_question",
       });
+
+      await updateLeadById(lead.id, {
+        currentStage: "awaiting_qualification_reply",
+      });
     } else {
       const [offers, faq, objections, messages] = await Promise.all([
         getActiveExpertOffers(expertProfile.id),
         getActiveExpertFaq(expertProfile.id),
         getActiveExpertObjections(expertProfile.id),
-        getRecentMessagesByLeadId(lead.id, 10),
+        getRecentMessagesByLeadId(lead.id, 4),
       ]);
 
       const prompt = buildNeiroPrompt({

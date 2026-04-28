@@ -40,6 +40,38 @@ type TelegramSendMessageResponse = {
   description?: string;
 };
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function convertMarkdownToTelegramHtml(text: string) {
+  const codeBlocks: string[] = [];
+  const withPlaceholders = text.replace(/```([\s\S]*?)```/g, (_, code: string) => {
+    const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+    codeBlocks.push(`<pre>${escapeHtml(code.trim())}</pre>`);
+    return placeholder;
+  });
+
+  let formatted = escapeHtml(withPlaceholders);
+
+  formatted = formatted.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (_, label: string, url: string) => `<a href="${escapeHtml(url)}">${label}</a>`,
+  );
+  formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  formatted = formatted.replace(/(^|\W)\*([^*\n]+)\*(?=\W|$)/g, "$1<i>$2</i>");
+  formatted = formatted.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+
+  return codeBlocks.reduce(
+    (result, block, index) => result.replace(`__CODE_BLOCK_${index}__`, block),
+    formatted,
+  );
+}
+
 function getTelegramBotToken() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -91,6 +123,8 @@ export function parseTelegramPrivateTextMessage(update: TelegramUpdate): Telegra
 }
 
 export async function sendTextMessage(chatId: number, text: string) {
+  const formattedText = convertMarkdownToTelegramHtml(text);
+
   const response = await fetch(`https://api.telegram.org/bot${getTelegramBotToken()}/sendMessage`, {
     method: "POST",
     headers: {
@@ -98,7 +132,8 @@ export async function sendTextMessage(chatId: number, text: string) {
     },
     body: JSON.stringify({
       chat_id: chatId,
-      text,
+      text: formattedText,
+      parse_mode: "HTML",
     }),
   });
 
