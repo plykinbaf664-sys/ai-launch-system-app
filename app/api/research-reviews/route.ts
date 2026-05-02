@@ -1,21 +1,30 @@
-type ReviewRow = {
+﻿type ReviewRow = {
   id: string;
   sourceLabel: string;
   sourceUrl: string;
-  problem: string;
+  clientSituation: string;
+  idealResult: string;
+  expectations: string;
   whyNoResult: string;
   fears: string;
-  desiredResult: string;
-  question: string;
+  pains: string;
+  prejudices: string;
+  triedBefore: string;
 };
 
-type AnthropicContentItem = {
+type OpenAIContentItem = {
   type?: string;
   text?: string;
 };
 
-type AnthropicResponse = {
-  content?: AnthropicContentItem[];
+type OpenAIOutputItem = {
+  type?: string;
+  content?: OpenAIContentItem[];
+};
+
+type OpenAIResponse = {
+  output_text?: string;
+  output?: OpenAIOutputItem[];
 };
 
 type ReviewsPayload = {
@@ -24,10 +33,9 @@ type ReviewsPayload = {
   reviews: ReviewRow[];
 };
 
-const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
-const ANTHROPIC_API_VERSION = "2023-06-01";
-const RESEARCH_MAX_TOKENS = 1800;
-const REPAIR_MAX_TOKENS = 1200;
+const DEFAULT_OPENAI_MODEL = "gpt-4.1";
+const RESEARCH_MAX_TOKENS = 3800;
+const REPAIR_MAX_TOKENS = 1800;
 
 const compactSchemaGuide = [
   "{",
@@ -38,20 +46,28 @@ const compactSchemaGuide = [
   '      "id": "string",',
   '      "sourceLabel": "string",',
   '      "sourceUrl": "string",',
-  '      "problem": ">=120 chars direct first-person quote",',
-  '      "whyNoResult": ">=120 chars direct first-person quote",',
-  '      "fears": ">=120 chars direct first-person quote",',
-  '      "desiredResult": ">=120 chars direct first-person quote",',
-  '      "question": ">=120 chars direct first-person quote"',
+  '      "clientSituation": "direct quote or explicit evidence",',
+  '      "idealResult": "direct quote or explicit evidence",',
+  '      "expectations": "direct quote or explicit evidence",',
+  '      "whyNoResult": "direct quote or explicit evidence",',
+  '      "fears": "direct quote or explicit evidence",',
+  '      "pains": "direct quote or explicit evidence",',
+  '      "prejudices": "direct quote or explicit evidence",',
+  '      "triedBefore": "direct quote or explicit evidence"',
   "    }",
   "  ]",
   "}",
 ].join("\n");
 
-function extractResponseText(responseData: AnthropicResponse) {
+function extractResponseText(responseData: OpenAIResponse) {
+  if (responseData.output_text?.trim()) {
+    return responseData.output_text.trim();
+  }
+
   return (
-    responseData.content
-      ?.filter((item) => item.type === "text")
+    responseData.output
+      ?.flatMap((item) => item.content || [])
+      .filter((item) => item.type === "output_text" || item.type === "text")
       .map((item) => item.text?.trim())
       .filter((item): item is string => Boolean(item))
       .join("\n")
@@ -72,86 +88,102 @@ function normalizeJsonText(value: string) {
     .trim();
 }
 
-function isLongString(value: unknown) {
-  return typeof value === "string" && value.trim().length >= 120;
+function asText(value: unknown, fallback = "Не найдено в источнике") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
-function isReviewRow(value: unknown): value is ReviewRow {
+function normalizeReviewRow(value: unknown, index: number): ReviewRow | null {
   if (!value || typeof value !== "object") {
-    return false;
+    return null;
   }
 
-  const row = value as ReviewRow;
+  const row = value as Partial<ReviewRow>;
+  const sourceLabel = asText(row.sourceLabel, `Источник ${index + 1}`);
+  const sourceUrl = asText(row.sourceUrl, "");
 
-  return (
-    typeof row.id === "string" &&
-    typeof row.sourceLabel === "string" &&
-    typeof row.sourceUrl === "string" &&
-    isLongString(row.problem) &&
-    isLongString(row.whyNoResult) &&
-    isLongString(row.fears) &&
-    isLongString(row.desiredResult) &&
-    isLongString(row.question)
-  );
+  if (!sourceUrl) {
+    return null;
+  }
+
+  return {
+    id: asText(row.id, `review-${index + 1}`),
+    sourceLabel,
+    sourceUrl,
+    clientSituation: asText(row.clientSituation),
+    idealResult: asText(row.idealResult),
+    expectations: asText(row.expectations),
+    whyNoResult: asText(row.whyNoResult),
+    fears: asText(row.fears),
+    pains: asText(row.pains),
+    prejudices: asText(row.prejudices),
+    triedBefore: asText(row.triedBefore),
+  };
 }
 
-function isReviewsPayload(value: unknown): value is ReviewsPayload {
+function normalizeReviewsPayload(value: unknown, niche: string, positioning: string): ReviewsPayload | null {
   if (!value || typeof value !== "object") {
-    return false;
+    return null;
   }
 
   const payload = value as ReviewsPayload;
+  const reviews = Array.isArray(payload.reviews)
+    ? payload.reviews
+        .map((review, index) => normalizeReviewRow(review, index))
+        .filter((review): review is ReviewRow => Boolean(review))
+        .slice(0, 10)
+    : [];
 
-  return (
-    typeof payload.niche === "string" &&
-    typeof payload.positioning === "string" &&
-    Array.isArray(payload.reviews) &&
-    payload.reviews.length === 10 &&
-    payload.reviews.every(isReviewRow)
-  );
-}
-
-async function callAnthropicApi(payload: object) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("Не найден ANTHROPIC_API_KEY.");
+  if (reviews.length === 0) {
+    return null;
   }
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  return {
+    niche: asText(payload.niche, niche),
+    positioning: asText(payload.positioning, positioning),
+    reviews,
+  };
+}
+
+async function callOpenAiApi(payload: object) {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("Не найден OPENAI_API_KEY.");
+  }
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": ANTHROPIC_API_VERSION,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Anthropic API вернул ошибку: ${errorText}`);
+    throw new Error(`OpenAI API вернул ошибку: ${errorText}`);
   }
 
-  return (await response.json()) as AnthropicResponse;
+  return (await response.json()) as OpenAIResponse;
 }
 
 async function repairMalformedJson(responseText: string, niche: string, positioning: string) {
-  const repairedResponse = await callAnthropicApi({
-    model: process.env.ANTHROPIC_MODEL || DEFAULT_ANTHROPIC_MODEL,
-    max_tokens: REPAIR_MAX_TOKENS,
-    system:
+  const repairedResponse = await callOpenAiApi({
+    model: process.env.OPENAI_RESEARCH_MODEL || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+    max_output_tokens: REPAIR_MAX_TOKENS,
+    instructions:
       "Convert the text into one valid JSON object. Return only raw JSON with no markdown fences and no commentary.",
-    messages: [
+    input: [
       {
         role: "user",
         content: `Target fields:
 niche="${niche}"
 positioning="${positioning}"
 
-Return one JSON object with 10 reviews.
-Required keys in each review: id, sourceLabel, sourceUrl, problem, whyNoResult, fears, desiredResult, question.
-Each quote field must stay a direct first-person quote and be at least 120 characters.
+Return one JSON object with up to 10 reviews.
+Required keys in each review: id, sourceLabel, sourceUrl, clientSituation, idealResult, expectations, whyNoResult, fears, pains, prejudices, triedBefore.
+Keep direct quotes where possible. Do not invent data.
 
 Malformed text:
 ${responseText}`,
@@ -169,12 +201,10 @@ ${responseText}`,
 }
 
 const systemPrompt = [
-  "You are a marketing researcher.",
-  "Use only open web sources with direct first-person user experience.",
-  "Allowed sources: forums, discussions, comments, reviews, Q&A, public posts, complaint threads.",
-  "Do not use expert articles, company pages, educational materials, summaries, or paraphrases.",
-  "Every quote field must be copied from the source as a direct first-person quote.",
-  "If a source lacks a valid quote for a field, skip that source.",
+  "You are a concise marketing researcher.",
+  "Use web_search and only open first-person sources: reviews, forums, comments, Q&A, public posts.",
+  "No expert articles, company pages, summaries, paraphrases, or invented data.",
+  "Ground every field in a quote or explicit source evidence.",
   "Return only raw JSON.",
 ].join(" ");
 
@@ -182,24 +212,10 @@ function buildUserPrompt(niche: string, positioning: string) {
   return `Ниша: ${niche}
 Позиционирование: ${positioning}
 
-Найди до 10 живых источников. Лучше меньше записей, чем слабые или пересказанные цитаты.
+Через web search найди до 10 живых first-person источников по нише. Лучше меньше релевантных, чем 10 слабых. Заполни:
+clientSituation=ситуация клиента; idealResult=идеальный результат; expectations=ожидания; whyNoResult=оправдания отсутствия результата; fears=страхи; pains=боли; prejudices=предрассудки; triedBefore=что уже пробовал.
 
-Нужны поля:
-- sourceLabel
-- sourceUrl
-- problem
-- whyNoResult
-- fears
-- desiredResult
-- question
-
-Правила:
-1. Только дословные цитаты от первого лица.
-2. Каждая цитата должна подходить только своей колонке.
-3. Никаких пересказов и додумывания.
-4. Для полей problem, whyNoResult, fears, desiredResult, question длина каждой цитаты минимум 120 символов.
-
-Верни raw JSON без markdown fences по такой форме:
+Правила: только отзывы/форумы/комментарии/Q&A/публичные посты; цитаты или явные факты из источника; без догадок; sourceUrl обязателен; если поля нет в источнике, пиши "Не найдено в источнике"; raw JSON без markdown:
 ${compactSchemaGuide}`;
 }
 
@@ -216,22 +232,22 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       return Response.json(
         {
           error:
-            "Не найден ANTHROPIC_API_KEY. Добавьте ключ в переменные окружения, чтобы включить сбор отзывов.",
+            "Не найден OPENAI_API_KEY. Добавьте ключ в переменные окружения, чтобы включить сбор отзывов.",
         },
         { status: 500 },
       );
     }
 
-    const responseData = await callAnthropicApi({
-      model: process.env.ANTHROPIC_MODEL || DEFAULT_ANTHROPIC_MODEL,
-      max_tokens: RESEARCH_MAX_TOKENS,
-      system: systemPrompt,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-      messages: [
+    const responseData = await callOpenAiApi({
+      model: process.env.OPENAI_RESEARCH_MODEL || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+      max_output_tokens: RESEARCH_MAX_TOKENS,
+      instructions: systemPrompt,
+      tools: [{ type: "web_search" }],
+      input: [
         {
           role: "user",
           content: buildUserPrompt(niche, positioning),
@@ -245,7 +261,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error:
-            "Не удалось прочитать ответ модели. Anthropic вернул ответ без текстового блока в ожидаемом формате.",
+            "Не удалось прочитать ответ модели. OpenAI вернул ответ без текстового блока в ожидаемом формате.",
         },
         { status: 502 },
       );
@@ -259,17 +275,19 @@ export async function POST(request: Request) {
       parsedJson = await repairMalformedJson(responseText, niche, positioning);
     }
 
-    if (!isReviewsPayload(parsedJson)) {
+    const normalizedPayload = normalizeReviewsPayload(parsedJson, niche, positioning);
+
+    if (!normalizedPayload) {
       return Response.json(
         {
           error:
-            "Ответ модели прочитан, но структура не совпала с ожидаемой. Проверьте, что модель вернула 10 записей и в каждой колонке есть полноценные прямые цитаты людей.",
+            "Ответ модели прочитан, но в нем не найдено ни одной записи с sourceUrl. Попробуйте сузить нишу или уточнить аудиторию.",
         },
         { status: 502 },
       );
     }
 
-    return Response.json(parsedJson);
+    return Response.json(normalizedPayload);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Неизвестная ошибка при сборе отзывов.";
