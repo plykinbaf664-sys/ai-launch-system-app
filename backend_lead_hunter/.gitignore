@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+.env
+!.env.example
+.venv/
+.uvicorn.*.log
