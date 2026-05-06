@@ -293,5 +293,206 @@ Pattern Analyzer = что делать
 рынок → данные → анализ → решения
 ```
 
-Система перестала быть “сборщиком данных” и стала инструментом принятия решений.
+Система перестала быть “сборщиком данных” и стала инструментом принятия решений
+
+06.05.2026
+
+• ## Lead Hunter Backend
+
+  В проект добавлен отдельный FastAPI backend для автоматической охоты за лидами в Instagram.
+
+  Папка:
+
+  ```text
+  backend_lead_hunter/
+
+  Backend работает отдельно от Next.js-приложения и отвечает за полный pipeline:
+
+  поиск доноров -> выбор постов -> сбор комментариев -> GPT-квалификация -> отправка лидов в Telegram
+
+  ## Что реализовано
+
+  - FastAPI endpoint POST /hunt-leads
+  - Web-интерфейс запуска охоты на /
+  - Интеграция с Apify:
+      - apify/instagram-search-scraper
+      - apify/instagram-scraper
+      - apify/instagram-comment-scraper
+  - Интеграция с OpenAI gpt-4o
+  - Telegram-уведомления через отдельного lead-бота
+  - Фильтр доноров от 5000 подписчиков
+  - Поиск по seed-донорам из .env
+  - Поиск похожих доноров по ключевым словам
+  - Фильтрация бизнесовых/экспертных постов через GPT
+  - Квалификация комментариев в статусы:
+      - HOT
+      - WARM
+      - SKIP
+  - Дополнительная проверка профиля для WARM лидов
+  - Красивое Telegram-сообщение с готовым оффером
+  - Inline-кнопка “Написать в Instagram”
+  - Суточная автоохота
+  - Автоохота стартует только после ручного запуска кнопкой
+  - После перезапуска сервера охота сама не стартует
+
+  ## Антидубли и память
+
+  Добавлено SQLite-хранилище:
+
+  lead_hunter.db
+
+  Оно хранит:
+
+  processed_posts
+  processed_comments
+  sent_leads
+
+  Зачем это нужно:
+
+  - не отправлять одного и того же лида повторно;
+  - не анализировать один и тот же комментарий повторно;
+  - не залипать на одних и тех же топ-постах;
+  - после перезапуска помнить, что уже обработано.
+
+  Если топовый пост уже был обработан, система берет следующий подходящий пост из последних 12 публикаций донора.
+
+  Файл базы добавлен в .gitignore.
+
+  ## Основные файлы
+
+  backend_lead_hunter/main.py
+
+  Управляет FastAPI, web-интерфейсом, запуском pipeline и scheduler’ом.
+
+  backend_lead_hunter/config.py
+
+  Читает настройки из .env.
+
+  backend_lead_hunter/services/competitor_service.py
+
+  Ищет доноров/конкурентов.
+
+  backend_lead_hunter/services/scraper_service.py
+
+  Собирает посты, комментарии и профили.
+
+  backend_lead_hunter/services/gpt_service.py
+
+  Фильтрует посты, анализирует комментарии, проверяет профили и генерирует офферы.
+
+  backend_lead_hunter/services/tg_service.py
+
+  Отправляет лиды в Telegram.
+
+  backend_lead_hunter/services/storage_service.py
+
+  SQLite-хранилище для dedupe и памяти между запусками.
+
+  ## Env-переменные
+
+  Пример находится в:
+
+  backend_lead_hunter/.env.example
+
+  Основные переменные:
+
+  APIFY_TOKEN=
+  OPENAI_API_KEY=
+
+  TG_LEAD_BOT=
+  MY_CHAT_ID=
+
+  APIFY_INSTAGRAM_SEARCH_ACTOR=apify/instagram-search-scraper
+  APIFY_INSTAGRAM_PROFILE_ACTOR=apify/instagram-scraper
+  APIFY_INSTAGRAM_COMMENT_ACTOR=apify/instagram-comment-scraper
+
+  OPENAI_MODEL=gpt-4o
+  DRY_RUN=false
+  APIFY_POLL_INTERVAL_SECONDS=20
+
+  SEED_DONORS=expert1,expert2,expert3
+  SIMILAR_DONOR_KEYWORDS=...
+  DEFAULT_KEYWORDS=...
+
+  MIN_DONOR_FOLLOWERS=5000
+
+  AUTO_HUNT_ENABLED=true
+  AUTO_HUNT_INTERVAL_HOURS=24
+  AUTO_HUNT_START_ON_BOOT=false
+  AUTO_HUNT_MAX_DONORS=3
+  AUTO_HUNT_MAX_COMMENTS_PER_POST=20
+
+  DATABASE_PATH=lead_hunter.db
+
+  ## Локальный запуск
+
+  Перейти в папку backend:
+
+  cd backend_lead_hunter
+
+  Установить зависимости:
+
+  pip install -r requirements.txt
+
+  Запустить сервер:
+
+  uvicorn main:app --reload
+
+  Открыть интерфейс:
+
+  http://127.0.0.1:8000
+
+  ## Как работает автоохота
+
+  Сервер после перезапуска не запускает охоту сам.
+
+  Сценарий:
+
+  1. Сервер запущен.
+  2. Пользователь открывает /.
+  3. Нажимает кнопку запуска охоты.
+  4. Первая охота стартует сразу.
+  5. С этого момента включается суточный отсчет.
+  6. Следующая охота запускается примерно через 24 часа.
+
+  Если сервер перезапустить, отсчет сбрасывается. Нужно снова нажать кнопку.
+
+  ## Деплой
+
+  Vercel подходит только для Next.js/frontend.
+
+  Этот FastAPI backend нельзя надежно держать на Vercel, потому что ему нужны:
+
+  - долгий pipeline;
+  - фоновые задачи;
+  - polling Apify;
+  - scheduler;
+  - постоянный backend-процесс.
+
+  Рекомендуемая схема:
+
+  Vercel = Next.js frontend
+  Railway / Render / VPS = backend_lead_hunter
+
+  Для продакшена на Railway/Render нужно:
+
+  - задеплоить папку backend_lead_hunter;
+  - добавить env-переменные;
+  - указать start command:
+
+  uvicorn main:app --host 0.0.0.0 --port $PORT
+
+  - для сохранения SQLite использовать persistent disk;
+  - либо заменить SQLite на Postgres.
+
+  ## Текущее состояние
+
+  Backend локально проверен:
+
+  - Python compile проходит без ошибок;
+  - сервер запускается на http://127.0.0.1:8000;
+  - SQLite-таблицы создаются;
+  - dedupe по постам/комментариям/лидам подключен;
+  - автоохота не стартует сама после ребута;
+  - суточный цикл активируется после ручного запуска.
 

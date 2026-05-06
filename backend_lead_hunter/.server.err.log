@@ -3,3 +3,148 @@ INFO:     Waiting for application startup.
 2026-05-06 02:41:46,601 | INFO | main | Автозапуск включен: каждые 24 часов, start_on_boot=False
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2026-05-06 14:24:27,411 | INFO | main | Ежедневная автоохота активирована ручным запуском
+2026-05-06 14:24:27,646 | INFO | main | Pipeline стартовал. Источник: manual. Ключи: автоматизация продаж, продажи в директ, нейросети для бизнеса, чат боты для бизнеса, воронка продаж, CRM для бизнеса, нейропродавец, ИИ для бизнеса, автоматизация бизнеса, автоворонка продаж, amocrm, онлайн школа, запуск онлайн школы, инстаграм продажи, лиды из инстаграм, ИИ ассистент, AI эксперт, бизнес процессы, отдел продаж, скрипты продаж, обработка заявок, клиентский сервис, директ менеджер
+2026-05-06 14:24:27,647 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:24:28,848 | INFO | services.apify_client | \u23f3 Apify run XJ283gfMKgzrxktNs: статус RUNNING
+2026-05-06 14:24:49,559 | INFO | services.apify_client | \u23f3 Apify run XJ283gfMKgzrxktNs: статус SUCCEEDED
+2026-05-06 14:24:49,899 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:24:49,900 | INFO | services.competitor_service | Добавил донора из SEED_DONORS: @artemiy.miller
+2026-05-06 14:24:49,902 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:24:50,440 | INFO | services.apify_client | \u23f3 Apify run WHPgR2SU0etG4wCKc: статус RUNNING
+2026-05-06 14:25:11,651 | INFO | services.apify_client | \u23f3 Apify run WHPgR2SU0etG4wCKc: статус SUCCEEDED
+2026-05-06 14:25:12,022 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:25:12,024 | INFO | services.competitor_service | Добавил донора из SEED_DONORS: @kossolapov_igor
+2026-05-06 14:25:12,025 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:25:12,636 | INFO | services.apify_client | \u23f3 Apify run lDC7fRZYsSt8ZKcLl: статус RUNNING
+2026-05-06 14:25:33,854 | INFO | services.apify_client | \u23f3 Apify run lDC7fRZYsSt8ZKcLl: статус SUCCEEDED
+2026-05-06 14:25:34,205 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:25:34,206 | INFO | services.competitor_service | Добавил донора из SEED_DONORS: @raspakui_ai
+2026-05-06 14:25:34,207 | INFO | main | Найдено доноров: 3
+2026-05-06 14:25:34,207 | INFO | services.scraper_service | Собираю последние посты донора @artemiy.miller
+2026-05-06 14:25:34,208 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:25:34,678 | INFO | services.apify_client | \u23f3 Apify run 5RQlvQZtm6BCwBHvk: статус RUNNING
+2026-05-06 14:25:55,962 | INFO | services.apify_client | \u23f3 Apify run 5RQlvQZtm6BCwBHvk: статус RUNNING
+2026-05-06 14:26:16,690 | INFO | services.apify_client | \u23f3 Apify run 5RQlvQZtm6BCwBHvk: статус RUNNING
+2026-05-06 14:26:37,420 | INFO | services.apify_client | \u23f3 Apify run 5RQlvQZtm6BCwBHvk: статус RUNNING
+2026-05-06 14:26:58,107 | INFO | services.apify_client | \u23f3 Apify run 5RQlvQZtm6BCwBHvk: статус RUNNING
+2026-05-06 14:27:18,839 | INFO | services.apify_client | \u23f3 Apify run 5RQlvQZtm6BCwBHvk: статус RUNNING
+2026-05-06 14:27:40,033 | INFO | services.apify_client | \u23f3 Apify run 5RQlvQZtm6BCwBHvk: статус RUNNING
+2026-05-06 14:28:00,737 | INFO | services.apify_client | \u23f3 Apify run 5RQlvQZtm6BCwBHvk: статус SUCCEEDED
+2026-05-06 14:28:01,113 | INFO | services.apify_client | \U0001f4e6 Получил 12 записей из Apify dataset
+2026-05-06 14:28:01,123 | INFO | services.scraper_service | Проверяю пост @artemiy.miller с 96 комментариями: https://www.instagram.com/p/DXh250SjFif/
+2026-05-06 14:28:06,250 | INFO | services.scraper_service | Пост экспертный, беру в работу: https://www.instagram.com/p/DXh250SjFif/
+2026-05-06 14:28:06,254 | INFO | services.scraper_service | Проверяю пост @artemiy.miller с 44 комментариями: https://www.instagram.com/p/DXfYC_ljBi9/
+2026-05-06 14:28:07,144 | INFO | services.scraper_service | Пост экспертный, беру в работу: https://www.instagram.com/p/DXfYC_ljBi9/
+2026-05-06 14:28:07,165 | INFO | services.scraper_service | Проверяю пост @artemiy.miller с 39 комментариями: https://www.instagram.com/p/DXz5ZSjAg4f/
+2026-05-06 14:28:07,950 | INFO | services.scraper_service | Пост экспертный, беру в работу: https://www.instagram.com/p/DXz5ZSjAg4f/
+2026-05-06 14:28:07,955 | INFO | services.scraper_service | Собираю комментарии к посту: https://www.instagram.com/p/DXh250SjFif/
+2026-05-06 14:28:07,955 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-comment-scraper
+2026-05-06 14:28:08,970 | INFO | services.apify_client | \u23f3 Apify run Oqc0kEuDIviTFS61i: статус RUNNING
+2026-05-06 14:28:30,153 | INFO | services.apify_client | \u23f3 Apify run Oqc0kEuDIviTFS61i: статус RUNNING
+2026-05-06 14:28:51,771 | INFO | services.apify_client | \u23f3 Apify run Oqc0kEuDIviTFS61i: статус RUNNING
+2026-05-06 14:29:13,597 | INFO | services.apify_client | \u23f3 Apify run Oqc0kEuDIviTFS61i: статус SUCCEEDED
+2026-05-06 14:29:13,956 | INFO | services.apify_client | \U0001f4e6 Получил 15 записей из Apify dataset
+2026-05-06 14:29:14,037 | INFO | main | Анализирую коммент @albertpxlsky: Какие реальные вы плюсы нашли от этого? А то все твердят про этот второй мозг, показывают красивую картинку. Но какие ре
+2026-05-06 14:29:16,635 | INFO | services.scraper_service | Проверяю профиль потенциального лида @albertpxlsky
+2026-05-06 14:29:16,639 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:29:17,295 | INFO | services.apify_client | \u23f3 Apify run FRk6C9IhhizhRJF4B: статус RUNNING
+2026-05-06 14:29:38,473 | INFO | services.apify_client | \u23f3 Apify run FRk6C9IhhizhRJF4B: статус SUCCEEDED
+2026-05-06 14:29:38,692 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:29:40,862 | INFO | main | Пропускаю WARM @albertpxlsky: не ЦА. Профиль принадлежит художнику без явных признаков коммерческого оффера или бизнес-активности, связанной с целевой аудиторией.
+2026-05-06 14:29:40,902 | INFO | main | Анализирую коммент @pimenov95r: Вы не упомянули, что каждая связь это потеря токенов на прочтение. Больше файлов и связей - больше потери токенов, так ч
+2026-05-06 14:29:42,606 | INFO | main | Коммент @pimenov95r не лид
+2026-05-06 14:29:42,640 | INFO | main | Анализирую коммент @vitaliy_shy: Это как завести муравейник и смотреть как муравьи бегают, а че делать с этим неясно \U0001f605 но прикольно \U0001f44d
+2026-05-06 14:29:44,154 | INFO | main | Коммент @vitaliy_shy не лид
+2026-05-06 14:29:44,188 | INFO | main | Анализирую коммент @sultanovich_me: Интересно
+2026-05-06 14:29:46,094 | INFO | services.scraper_service | Проверяю профиль потенциального лида @sultanovich_me
+2026-05-06 14:29:46,099 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:29:47,096 | INFO | services.apify_client | \u23f3 Apify run VT4o7yuUxCOTxMZb2: статус RUNNING
+2026-05-06 14:30:07,790 | INFO | services.apify_client | \u23f3 Apify run VT4o7yuUxCOTxMZb2: статус RUNNING
+2026-05-06 14:30:28,552 | INFO | services.apify_client | \u23f3 Apify run VT4o7yuUxCOTxMZb2: статус SUCCEEDED
+2026-05-06 14:30:28,760 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:30:29,825 | INFO | main | Пропускаю WARM @sultanovich_me: не ЦА. Профиль выглядит как личный аккаунт без признаков бизнеса или коммерческого оффера. Нет постов, биография пустая, и нет внешней ссылки.
+2026-05-06 14:30:29,841 | INFO | main | Анализирую коммент @nik.agapov: Интересно)
+2026-05-06 14:30:31,442 | INFO | services.scraper_service | Проверяю профиль потенциального лида @nik.agapov
+2026-05-06 14:30:31,444 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:30:32,084 | INFO | services.apify_client | \u23f3 Apify run ve77jdZZBO3XhASEn: статус RUNNING
+2026-05-06 14:30:52,804 | INFO | services.apify_client | \u23f3 Apify run ve77jdZZBO3XhASEn: статус RUNNING
+2026-05-06 14:31:13,496 | INFO | services.apify_client | \u23f3 Apify run ve77jdZZBO3XhASEn: статус SUCCEEDED
+2026-05-06 14:31:13,865 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:31:15,815 | INFO | services.tg_service | Отправил WARM лид в Telegram: @nik.agapov
+2026-05-06 14:31:15,866 | INFO | main | Анализирую коммент @sultanovich_me: Интересно
+2026-05-06 14:31:18,216 | INFO | services.scraper_service | Проверяю профиль потенциального лида @sultanovich_me
+2026-05-06 14:31:18,246 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:31:18,818 | INFO | services.apify_client | \u23f3 Apify run sKaQGgvf6yjL1a3ru: статус RUNNING
+2026-05-06 14:31:40,036 | INFO | services.apify_client | \u23f3 Apify run sKaQGgvf6yjL1a3ru: статус RUNNING
+2026-05-06 14:32:00,755 | INFO | services.apify_client | \u23f3 Apify run sKaQGgvf6yjL1a3ru: статус SUCCEEDED
+2026-05-06 14:32:01,004 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:32:01,934 | INFO | main | Пропускаю WARM @sultanovich_me: не ЦА. Профиль выглядит как личный аккаунт без признаков бизнеса или коммерческого оффера. Нет постов и информации о деятельности.
+2026-05-06 14:32:01,961 | INFO | main | Анализирую коммент @sokolovsky26: Интересно
+2026-05-06 14:32:03,532 | INFO | services.scraper_service | Проверяю профиль потенциального лида @sokolovsky26
+2026-05-06 14:32:03,534 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:32:04,026 | INFO | services.apify_client | \u23f3 Apify run xAq7641IebbilLcsR: статус RUNNING
+2026-05-06 14:32:25,221 | INFO | services.apify_client | \u23f3 Apify run xAq7641IebbilLcsR: статус SUCCEEDED
+2026-05-06 14:32:25,457 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:32:27,307 | INFO | services.tg_service | Отправил WARM лид в Telegram: @sokolovsky26
+2026-05-06 14:32:27,362 | INFO | main | Анализирую коммент @maphendx: Интересно
+2026-05-06 14:32:29,009 | INFO | services.scraper_service | Проверяю профиль потенциального лида @maphendx
+2026-05-06 14:32:29,020 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:32:29,648 | INFO | services.apify_client | \u23f3 Apify run InU2GSofVRYaam9Qj: статус RUNNING
+2026-05-06 14:32:50,334 | INFO | services.apify_client | \u23f3 Apify run InU2GSofVRYaam9Qj: статус SUCCEEDED
+2026-05-06 14:32:50,523 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:32:51,502 | INFO | main | Пропускаю WARM @maphendx: не ЦА. Личный аккаунт без признаков бизнеса или коммерческого оффера.
+2026-05-06 14:32:51,540 | INFO | main | Анализирую коммент @ogluex: Я сварщик мне нахуя
+2026-05-06 14:32:52,868 | INFO | main | Коммент @ogluex не лид
+2026-05-06 14:32:52,928 | INFO | main | Анализирую коммент @moon_linkln: Бесполезная история. Берите mcp memapece и не мучайтесь.  Любая нейронка разберутся сама что к чему. Вообще у любого ии 
+2026-05-06 14:32:53,979 | INFO | main | Коммент @moon_linkln не лид
+2026-05-06 14:32:53,996 | INFO | main | Анализирую коммент @akai_xr: Интересно
+2026-05-06 14:32:55,703 | INFO | services.scraper_service | Проверяю профиль потенциального лида @akai_xr
+2026-05-06 14:32:55,716 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:32:57,282 | INFO | services.apify_client | \u23f3 Apify run WLJHoj2mShI2ePw5B: статус RUNNING
+2026-05-06 14:33:18,503 | INFO | services.apify_client | \u23f3 Apify run WLJHoj2mShI2ePw5B: статус SUCCEEDED
+2026-05-06 14:33:18,695 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:33:21,121 | INFO | services.tg_service | Отправил WARM лид в Telegram: @akai_xr
+2026-05-06 14:33:21,165 | INFO | main | Анализирую коммент @jjxxwo_: Интересно
+2026-05-06 14:33:22,535 | INFO | services.scraper_service | Проверяю профиль потенциального лида @jjxxwo_
+2026-05-06 14:33:22,536 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:33:23,010 | INFO | services.apify_client | \u23f3 Apify run kkFaF4RcSZbfUcC5S: статус RUNNING
+2026-05-06 14:33:44,245 | INFO | services.apify_client | \u23f3 Apify run kkFaF4RcSZbfUcC5S: статус RUNNING
+2026-05-06 14:34:05,462 | INFO | services.apify_client | \u23f3 Apify run kkFaF4RcSZbfUcC5S: статус SUCCEEDED
+2026-05-06 14:34:05,692 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:34:06,877 | INFO | main | Пропускаю WARM @jjxxwo_: не ЦА. Профиль выглядит как личный аккаунт без признаков бизнеса или коммерческого оффера.
+2026-05-06 14:34:06,926 | INFO | main | Анализирую коммент @yakushin_andrey: Интересно
+2026-05-06 14:34:08,442 | INFO | services.scraper_service | Проверяю профиль потенциального лида @yakushin_andrey
+2026-05-06 14:34:08,444 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:34:08,981 | INFO | services.apify_client | \u23f3 Apify run r2KcSZfGjcX8PDe4u: статус RUNNING
+2026-05-06 14:34:29,818 | INFO | services.apify_client | \u23f3 Apify run r2KcSZfGjcX8PDe4u: статус SUCCEEDED
+2026-05-06 14:34:30,036 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:34:30,849 | INFO | main | Пропускаю WARM @yakushin_andrey: не ЦА. Профиль выглядит как личный аккаунт без признаков бизнеса или коммерческого оффера.
+2026-05-06 14:34:30,954 | INFO | main | Анализирую коммент @ibraim.y96: Знаете, что самое удобное ? Это ортопедическая  подушка
+2026-05-06 14:34:32,326 | INFO | main | Коммент @ibraim.y96 не лид
+2026-05-06 14:34:32,363 | INFO | main | Анализирую коммент @manauru777: Капец как зайду в инсту так все больше понимаю что не догоняю прогресс)
+2026-05-06 14:34:33,936 | INFO | services.scraper_service | Проверяю профиль потенциального лида @manauru777
+2026-05-06 14:34:33,940 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-scraper
+2026-05-06 14:34:34,452 | INFO | services.apify_client | \u23f3 Apify run i7EuKT4Chr4pvR4tt: статус RUNNING
+2026-05-06 14:34:55,204 | INFO | services.apify_client | \u23f3 Apify run i7EuKT4Chr4pvR4tt: статус RUNNING
+2026-05-06 14:35:15,918 | INFO | services.apify_client | \u23f3 Apify run i7EuKT4Chr4pvR4tt: статус SUCCEEDED
+2026-05-06 14:35:16,101 | INFO | services.apify_client | \U0001f4e6 Получил 1 записей из Apify dataset
+2026-05-06 14:35:17,035 | INFO | main | Пропускаю WARM @manauru777: не ЦА. Личный аккаунт без признаков бизнеса или коммерческого оффера.
+2026-05-06 14:35:17,083 | INFO | services.scraper_service | Собираю комментарии к посту: https://www.instagram.com/p/DXfYC_ljBi9/
+2026-05-06 14:35:17,083 | INFO | services.apify_client | \U0001f680 Запускаю Apify актор: apify/instagram-comment-scraper
+2026-05-06 14:35:17,590 | INFO | services.apify_client | \u23f3 Apify run bRmGQ6g0wPlsNiSXh: статус RUNNING
+2026-05-06 14:35:38,818 | INFO | services.apify_client | \u23f3 Apify run bRmGQ6g0wPlsNiSXh: статус RUNNING
+2026-05-06 14:36:00,012 | INFO | services.apify_client | \u23f3 Apify run bRmGQ6g0wPlsNiSXh: статус SUCCEEDED
+2026-05-06 14:36:00,205 | INFO | services.apify_client | \U0001f4e6 Получил 12 записей из Apify dataset
+2026-05-06 14:36:00,218 | INFO | main | Анализирую коммент @stoforandov_sokrat: Можешь объяснить, зачем тебе Антигравити, если Есть Клод Опус 4.7
+2026-05-06 14:36:01,360 | INFO | main | Коммент @stoforandov_sokrat не лид
+2026-05-06 14:36:01,400 | INFO | main | Анализирую коммент @savostinez: А что по kimi?
+2026-05-06 14:36:02,655 | INFO | main | Коммент @savostinez не лид
+2026-05-06 14:36:02,689 | INFO | main | Анализирую коммент @mmaaeellss: Когда сам не кодишь но надо новый постик сделать
+2026-05-06 14:36:04,238 | INFO | main | Коммент @mmaaeellss не лид
+2026-05-06 14:36:04,282 | INFO | main | Анализирую коммент @kidfreedom: Codex? Не, не слышали ))
+2026-05-06 14:36:05,602 | INFO | main | Коммент @kidfreedom не лид
+2026-05-06 14:36:05,650 | INFO | main | Анализирую коммент @bakaev_it: Ох уж эти блохеры \U0001f921 
+У меня подписки и на  gpt и на клод, и один проект делаю двумя инструментами. И с некоторыми задача
+2026-05-06 14:36:06,953 | INFO | main | Коммент @bakaev_it не лид
+2026-05-06 14:36:07,008 | INFO | main | Анализирую коммент @andrew.pivovarov: Codex от Gpt для кодинга номер 1 на практике. Claude местами лучше codex

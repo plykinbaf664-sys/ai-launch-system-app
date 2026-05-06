@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     auto_hunt_interval_hours: int = Field(default=24, alias="AUTO_HUNT_INTERVAL_HOURS")
     auto_hunt_start_on_boot: bool = Field(default=False, alias="AUTO_HUNT_START_ON_BOOT")
     auto_hunt_max_donors: int = Field(default=3, alias="AUTO_HUNT_MAX_DONORS")
-    auto_hunt_max_comments_per_post: int = Field(default=20, alias="AUTO_HUNT_MAX_COMMENTS_PER_POST")
+    auto_hunt_max_comments_per_post: int = Field(default=100, alias="AUTO_HUNT_MAX_COMMENTS_PER_POST")
     database_path: str = Field(default="lead_hunter.db", alias="DATABASE_PATH")
 
     model_config = SettingsConfigDict(
