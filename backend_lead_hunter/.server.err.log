@@ -1,5 +1,5 @@
-INFO:     Started server process [7272]
+INFO:     Started server process [10824]
 INFO:     Waiting for application startup.
-2026-05-06 02:07:01,596 | INFO | main | Автозапуск включен: каждые 24 часов, start_on_boot=False
+2026-05-06 02:41:46,601 | INFO | main | Автозапуск включен: каждые 24 часов, start_on_boot=False
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)

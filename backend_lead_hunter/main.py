@@ -14,6 +14,7 @@ from services.apify_client import ApifyClient
 from services.competitor_service import CompetitorService
 from services.gpt_service import GPTService
 from services.scraper_service import ScraperService
+from services.storage_service import StorageService
 from services.tg_service import TelegramService
 
 
@@ -345,6 +346,7 @@ async def _run_pipeline_unlocked(job_id: str, request: HuntRequest, keywords: li
             apify_client = ApifyClient(settings, http_client)
             gpt_service = GPTService(settings)
             tg_service = TelegramService(settings)
+            storage_service = StorageService(settings)
             competitor_service = CompetitorService(settings, apify_client)
             scraper_service = ScraperService(settings, apify_client, gpt_service)
 
@@ -356,14 +358,27 @@ async def _run_pipeline_unlocked(job_id: str, request: HuntRequest, keywords: li
             logger.info("Найдено доноров: %s", len(competitors))
 
             for competitor_username in competitors:
-                target_posts = await scraper_service.find_target_posts(competitor_username)
+                target_posts = await scraper_service.find_target_posts(
+                    competitor_username,
+                    is_post_processed=storage_service.has_processed_post,
+                )
                 for post in target_posts:
+                    if storage_service.has_processed_post(post.url):
+                        logger.info("Пропускаю уже обработанный пост: %s", post.url)
+                        continue
+
                     sent_count += await process_post(
                         post=post,
                         max_comments=request.max_comments_per_post,
                         scraper_service=scraper_service,
                         gpt_service=gpt_service,
                         tg_service=tg_service,
+                        storage_service=storage_service,
+                    )
+                    storage_service.mark_processed_post(
+                        post_url=post.url,
+                        donor_username=post.competitor_username,
+                        comments_count=post.comments_count,
                     )
 
         jobs[job_id] = JobState(
@@ -382,6 +397,7 @@ async def process_post(
     scraper_service: ScraperService,
     gpt_service: GPTService,
     tg_service: TelegramService,
+    storage_service: StorageService,
 ) -> int:
     sent_count = 0
     comments = await scraper_service.get_comments(post.url, max_comments)
@@ -393,8 +409,15 @@ async def process_post(
         if not username or not comment_text:
             continue
 
+        comment_id = extract_comment_id(comment)
+        comment_key = storage_service.comment_key(post.url, username, comment_text, comment_id)
+        if storage_service.has_processed_comment(comment_key):
+            logger.info("Пропускаю уже обработанный коммент @%s", username)
+            continue
+
         if username.lower() == post.competitor_username.lower():
             logger.info("Пропускаю комментарий автора поста @%s", username)
+            storage_service.mark_processed_comment(comment_key, post.url, username, "SKIP")
             continue
 
         logger.info("Анализирую коммент @%s: %s", username, comment_text[:120])
@@ -405,17 +428,20 @@ async def process_post(
 
         if result.status not in {"HOT", "WARM"}:
             logger.info("Коммент @%s не лид", username)
+            storage_service.mark_processed_comment(comment_key, post.url, username, result.status)
             continue
 
         if result.status == "WARM":
             profile = await scraper_service.get_profile(username)
             if not profile:
                 logger.info("Пропускаю WARM @%s: профиль не найден", username)
+                storage_service.mark_processed_comment(comment_key, post.url, username, "WARM_PROFILE_NOT_FOUND")
                 continue
 
             is_target, reason = await gpt_service.is_target_profile(profile, comment_text)
             if not is_target:
                 logger.info("Пропускаю WARM @%s: не ЦА. %s", username, reason)
+                storage_service.mark_processed_comment(comment_key, post.url, username, "WARM_NOT_TARGET")
                 continue
 
             result.analysis = f"{result.analysis}\n\nПрофиль ЦА: да. {reason}"
@@ -431,7 +457,14 @@ async def process_post(
             analysis=result.analysis,
             offer=result.offer,
         )
+        if storage_service.has_sent_lead(lead):
+            logger.info("Пропускаю дубль лида @%s", username)
+            storage_service.mark_processed_comment(comment_key, post.url, username, f"{result.status}_DUPLICATE")
+            continue
+
         await tg_service.send_hot_lead(lead)
+        storage_service.mark_sent_lead(lead)
+        storage_service.mark_processed_comment(comment_key, post.url, username, result.status)
         sent_count += 1
 
     return sent_count
@@ -455,4 +488,14 @@ def extract_comment_text(comment: dict[str, Any]) -> str | None:
     raw_text = comment.get("text") or comment.get("comment") or comment.get("caption")
     if isinstance(raw_text, str):
         return raw_text.strip()
+    return None
+
+
+def extract_comment_id(comment: dict[str, Any]) -> str | None:
+    for key in ("id", "commentId", "pk", "shortCode"):
+        raw_value = comment.get(key)
+        if isinstance(raw_value, str) and raw_value.strip():
+            return raw_value.strip()
+        if isinstance(raw_value, int):
+            return str(raw_value)
     return None

@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from config import Settings
@@ -21,7 +22,11 @@ class ScraperService:
         self._apify_client = apify_client
         self._gpt_service = gpt_service
 
-    async def find_target_posts(self, competitor_username: str) -> list[ViralPost]:
+    async def find_target_posts(
+        self,
+        competitor_username: str,
+        is_post_processed: Callable[[str], bool] | None = None,
+    ) -> list[ViralPost]:
         logger.info("Собираю последние посты донора @%s", competitor_username)
         payload = {
             "directUrls": [f"https://www.instagram.com/{competitor_username}/"],
@@ -36,10 +41,14 @@ class ScraperService:
 
         posts = [self._normalize_post(item, competitor_username) for item in items]
         posts = [post for post in posts if post.url]
-        top_posts = sorted(posts, key=lambda post: post.comments_count, reverse=True)[:3]
+        top_posts = sorted(posts, key=lambda post: post.comments_count, reverse=True)
 
         target_posts: list[ViralPost] = []
         for post in top_posts:
+            if is_post_processed and is_post_processed(post.url):
+                logger.info("Пост уже был обработан раньше, ищу следующий: %s", post.url)
+                continue
+
             logger.info(
                 "Проверяю пост @%s с %s комментариями: %s",
                 competitor_username,
@@ -50,6 +59,8 @@ class ScraperService:
             if is_business:
                 logger.info("Пост экспертный, беру в работу: %s", post.url)
                 target_posts.append(post)
+                if len(target_posts) >= 3:
+                    break
             else:
                 logger.info("Пост не похож на бизнесовый, пропускаю: %s", post.url)
 
