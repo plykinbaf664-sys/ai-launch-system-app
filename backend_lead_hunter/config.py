@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     auto_hunt_start_on_boot: bool = Field(default=False, alias="AUTO_HUNT_START_ON_BOOT")
     auto_hunt_max_donors: int = Field(default=3, alias="AUTO_HUNT_MAX_DONORS")
     auto_hunt_max_comments_per_post: int = Field(default=100, alias="AUTO_HUNT_MAX_COMMENTS_PER_POST")
+    auto_hunt_max_leads: int = Field(default=10, alias="AUTO_HUNT_MAX_LEADS")
+    comment_fetch_growth_factor: int = Field(default=2, alias="COMMENT_FETCH_GROWTH_FACTOR")
+    comment_fetch_hard_limit: int = Field(default=1000, alias="COMMENT_FETCH_HARD_LIMIT")
     database_path: str = Field(default="lead_hunter.db", alias="DATABASE_PATH")
 
     model_config = SettingsConfigDict(

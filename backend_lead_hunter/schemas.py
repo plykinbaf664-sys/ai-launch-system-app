@@ -5,6 +5,7 @@ class HuntRequest(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     max_competitors: int = Field(default=10, ge=1, le=50)
     max_comments_per_post: int = Field(default=80, ge=1, le=500)
+    max_leads: int = Field(default=10, ge=1, le=100)
 
 
 class HuntResponse(BaseModel):

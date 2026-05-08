@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import logging
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -38,6 +39,13 @@ jobs: dict[str, JobState] = {}
 pipeline_lock = asyncio.Lock()
 scheduler_task: asyncio.Task[None] | None = None
 auto_hunt_armed = False
+
+
+@dataclass
+class PostProcessResult:
+    sent_count: int
+    is_exhausted: bool
+    stopped_by_lead_limit: bool
 
 
 @app.on_event("startup")
@@ -170,8 +178,12 @@ async def index() -> str:
           <input id="maxCompetitors" type="number" min="1" max="50" value="3">
         </div>
         <div>
-          <label for="maxComments">Комментариев на пост</label>
-          <input id="maxComments" type="number" min="1" max="500" value="20">
+          <label for="maxComments">Стартовый лимит комментариев</label>
+          <input id="maxComments" type="number" min="1" max="1000" value="100">
+        </div>
+        <div>
+          <label for="maxLeads">Лидов за запуск</label>
+          <input id="maxLeads" type="number" min="1" max="100" value="10">
         </div>
       </div>
 
@@ -232,6 +244,7 @@ async def index() -> str:
         keywords: parseKeywords(document.getElementById("keywords").value),
         max_competitors: Number(document.getElementById("maxCompetitors").value),
         max_comments_per_post: Number(document.getElementById("maxComments").value),
+        max_leads: Number(document.getElementById("maxLeads").value),
       }};
 
       try {{
@@ -311,6 +324,7 @@ async def schedule_auto_hunt(source: str) -> str:
         keywords=[],
         max_competitors=settings.auto_hunt_max_donors,
         max_comments_per_post=settings.auto_hunt_max_comments_per_post,
+        max_leads=settings.auto_hunt_max_leads,
     )
     asyncio.create_task(run_pipeline(job_id, request, settings.default_keyword_list, source))
     logger.info("Создана автоохота %s: %s", source, job_id)
@@ -367,25 +381,36 @@ async def _run_pipeline_unlocked(job_id: str, request: HuntRequest, keywords: li
                         logger.info("Пропускаю уже обработанный пост: %s", post.url)
                         continue
 
-                    sent_count += await process_post(
+                    post_result = await process_post(
                         post=post,
                         max_comments=request.max_comments_per_post,
+                        max_leads_left=request.max_leads - sent_count,
+                        comment_fetch_hard_limit=settings.comment_fetch_hard_limit,
+                        comment_fetch_growth_factor=settings.comment_fetch_growth_factor,
                         scraper_service=scraper_service,
                         gpt_service=gpt_service,
                         tg_service=tg_service,
                         storage_service=storage_service,
                     )
+                    sent_count += post_result.sent_count
                     storage_service.mark_processed_post(
                         post_url=post.url,
                         donor_username=post.competitor_username,
                         comments_count=post.comments_count,
+                        status="DONE" if post_result.is_exhausted else "IN_PROGRESS",
                     )
+                    if sent_count >= request.max_leads:
+                        logger.info("Достигнут лимит лидов за запуск: %s", request.max_leads)
+                        break
+
+                if sent_count >= request.max_leads:
+                    break
 
         jobs[job_id] = JobState(
             status="SUCCEEDED",
-            detail=f"Pipeline завершен. Лидов отправлено: {sent_count}",
+            detail=f"Pipeline завершен. Лидов отправлено: {sent_count}. Лимит: {request.max_leads}",
         )
-        logger.info("Pipeline завершен. Лидов отправлено: %s", sent_count)
+        logger.info("Pipeline завершен. Лидов отправлено: %s. Лимит: %s", sent_count, request.max_leads)
     except Exception as exc:
         logger.exception("Pipeline упал с ошибкой")
         jobs[job_id] = JobState(status="FAILED", detail=str(exc))
@@ -394,80 +419,139 @@ async def _run_pipeline_unlocked(job_id: str, request: HuntRequest, keywords: li
 async def process_post(
     post: ViralPost,
     max_comments: int,
+    max_leads_left: int,
+    comment_fetch_hard_limit: int,
+    comment_fetch_growth_factor: int,
     scraper_service: ScraperService,
     gpt_service: GPTService,
     tg_service: TelegramService,
     storage_service: StorageService,
-) -> int:
+) -> PostProcessResult:
     sent_count = 0
-    comments = await scraper_service.get_comments(post.url, max_comments)
+    is_exhausted = False
+    stopped_by_lead_limit = False
+    if max_leads_left <= 0:
+        return PostProcessResult(sent_count=0, is_exhausted=False, stopped_by_lead_limit=True)
 
-    for comment in comments:
-        username = extract_comment_username(comment)
-        comment_text = extract_comment_text(comment)
+    fetch_limit = max(1, max_comments)
+    hard_limit = max(fetch_limit, comment_fetch_hard_limit)
+    growth_factor = max(2, comment_fetch_growth_factor)
 
-        if not username or not comment_text:
-            continue
+    while True:
+        comments = await scraper_service.get_comments(post.url, fetch_limit)
+        new_comments_seen = 0
 
-        comment_id = extract_comment_id(comment)
-        comment_key = storage_service.comment_key(post.url, username, comment_text, comment_id)
-        if storage_service.has_processed_comment(comment_key):
-            logger.info("Пропускаю уже обработанный коммент @%s", username)
-            continue
+        for comment in comments:
+            if sent_count >= max_leads_left:
+                logger.info("Лимит лидов для текущего запуска достигнут, останавливаю анализ поста")
+                stopped_by_lead_limit = True
+                break
 
-        if username.lower() == post.competitor_username.lower():
-            logger.info("Пропускаю комментарий автора поста @%s", username)
-            storage_service.mark_processed_comment(comment_key, post.url, username, "SKIP")
-            continue
+            username = extract_comment_username(comment)
+            comment_text = extract_comment_text(comment)
 
-        logger.info("Анализирую коммент @%s: %s", username, comment_text[:120])
-        result = await gpt_service.analyze_comment(
-            comment_text=comment_text,
-            competitor_name=post.competitor_full_name or post.competitor_username,
-        )
+            if not username or not comment_text:
+                continue
 
-        if result.status not in {"HOT", "WARM"}:
-            logger.info("Коммент @%s не лид", username)
+            comment_id = extract_comment_id(comment)
+            comment_key = storage_service.comment_key(post.url, username, comment_text, comment_id)
+            if storage_service.has_processed_comment(comment_key):
+                logger.info("Пропускаю уже обработанный коммент @%s", username)
+                continue
+
+            new_comments_seen += 1
+
+            if username.lower() == post.competitor_username.lower():
+                logger.info("Пропускаю комментарий автора поста @%s", username)
+                storage_service.mark_processed_comment(comment_key, post.url, username, "SKIP")
+                continue
+
+            logger.info("Анализирую коммент @%s: %s", username, comment_text[:120])
+            result = await gpt_service.analyze_comment(
+                comment_text=comment_text,
+                competitor_name=post.competitor_full_name or post.competitor_username,
+            )
+
+            if result.status not in {"HOT", "WARM"}:
+                logger.info("Коммент @%s не лид", username)
+                storage_service.mark_processed_comment(comment_key, post.url, username, result.status)
+                continue
+
+            if result.status == "WARM":
+                profile = await scraper_service.get_profile(username)
+                if not profile:
+                    logger.info("Пропускаю WARM @%s: профиль не найден", username)
+                    storage_service.mark_processed_comment(comment_key, post.url, username, "WARM_PROFILE_NOT_FOUND")
+                    continue
+
+                is_target, reason = await gpt_service.is_target_profile(profile, comment_text)
+                if not is_target:
+                    logger.info("Пропускаю WARM @%s: не ЦА. %s", username, reason)
+                    storage_service.mark_processed_comment(comment_key, post.url, username, "WARM_NOT_TARGET")
+                    continue
+
+                result.analysis = f"{result.analysis}\n\nПрофиль ЦА: да. {reason}"
+
+            lead = HotLead(
+                status=result.status,
+                username=username,
+                profile_url=f"https://www.instagram.com/{username}/",
+                comment_text=comment_text,
+                post_url=post.url,
+                competitor_username=post.competitor_username,
+                competitor_full_name=post.competitor_full_name,
+                analysis=result.analysis,
+                offer=result.offer,
+            )
+            if storage_service.has_sent_lead(lead):
+                logger.info("Пропускаю дубль лида @%s", username)
+                storage_service.mark_processed_comment(comment_key, post.url, username, f"{result.status}_DUPLICATE")
+                continue
+
+            if storage_service.has_sent_username(username):
+                logger.info("Пропускаю уже отправленного пользователя @%s", username)
+                storage_service.mark_processed_comment(
+                    comment_key,
+                    post.url,
+                    username,
+                    f"{result.status}_USER_DUPLICATE",
+                )
+                continue
+
+            await tg_service.send_hot_lead(lead)
+            storage_service.mark_sent_lead(lead)
             storage_service.mark_processed_comment(comment_key, post.url, username, result.status)
-            continue
+            sent_count += 1
 
-        if result.status == "WARM":
-            profile = await scraper_service.get_profile(username)
-            if not profile:
-                logger.info("Пропускаю WARM @%s: профиль не найден", username)
-                storage_service.mark_processed_comment(comment_key, post.url, username, "WARM_PROFILE_NOT_FOUND")
-                continue
+        if stopped_by_lead_limit:
+            break
 
-            is_target, reason = await gpt_service.is_target_profile(profile, comment_text)
-            if not is_target:
-                logger.info("Пропускаю WARM @%s: не ЦА. %s", username, reason)
-                storage_service.mark_processed_comment(comment_key, post.url, username, "WARM_NOT_TARGET")
-                continue
+        if len(comments) < fetch_limit:
+            is_exhausted = True
+            break
 
-            result.analysis = f"{result.analysis}\n\nПрофиль ЦА: да. {reason}"
+        if new_comments_seen == 0:
+            logger.info("В лимите %s не осталось новых комментариев, расширяю сбор", fetch_limit)
 
-        lead = HotLead(
-            status=result.status,
-            username=username,
-            profile_url=f"https://www.instagram.com/{username}/",
-            comment_text=comment_text,
-            post_url=post.url,
-            competitor_username=post.competitor_username,
-            competitor_full_name=post.competitor_full_name,
-            analysis=result.analysis,
-            offer=result.offer,
+        if fetch_limit >= hard_limit:
+            logger.info("Достигнут защитный лимит комментариев на пост: %s", hard_limit)
+            is_exhausted = post.comments_count <= hard_limit
+            break
+
+        next_fetch_limit = min(fetch_limit * growth_factor, hard_limit)
+        logger.info(
+            "Лидов по посту пока %s, расширяю сбор комментариев: %s -> %s",
+            sent_count,
+            fetch_limit,
+            next_fetch_limit,
         )
-        if storage_service.has_sent_lead(lead):
-            logger.info("Пропускаю дубль лида @%s", username)
-            storage_service.mark_processed_comment(comment_key, post.url, username, f"{result.status}_DUPLICATE")
-            continue
+        fetch_limit = next_fetch_limit
 
-        await tg_service.send_hot_lead(lead)
-        storage_service.mark_sent_lead(lead)
-        storage_service.mark_processed_comment(comment_key, post.url, username, result.status)
-        sent_count += 1
-
-    return sent_count
+    return PostProcessResult(
+        sent_count=sent_count,
+        is_exhausted=is_exhausted,
+        stopped_by_lead_limit=stopped_by_lead_limit,
+    )
 
 
 def extract_comment_username(comment: dict[str, Any]) -> str | None:

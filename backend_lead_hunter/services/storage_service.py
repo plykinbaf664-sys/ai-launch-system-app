@@ -14,16 +14,32 @@ class StorageService:
         self._init_db()
 
     def has_processed_post(self, post_url: str) -> bool:
-        return self._exists("processed_posts", "post_url", post_url)
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM processed_posts WHERE post_url = ? AND status = 'DONE' LIMIT 1",
+                (post_url,),
+            ).fetchone()
+        return row is not None
 
-    def mark_processed_post(self, post_url: str, donor_username: str, comments_count: int) -> None:
+    def mark_processed_post(
+        self,
+        post_url: str,
+        donor_username: str,
+        comments_count: int,
+        status: str = "DONE",
+    ) -> None:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT OR IGNORE INTO processed_posts (post_url, donor_username, comments_count)
-                VALUES (?, ?, ?)
+                INSERT INTO processed_posts (post_url, donor_username, comments_count, status)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(post_url) DO UPDATE SET
+                    donor_username = excluded.donor_username,
+                    comments_count = excluded.comments_count,
+                    status = excluded.status,
+                    processed_at = CURRENT_TIMESTAMP
                 """,
-                (post_url, donor_username, comments_count),
+                (post_url, donor_username, comments_count, status),
             )
 
     def has_processed_comment(self, comment_key: str) -> bool:
@@ -48,6 +64,9 @@ class StorageService:
 
     def has_sent_lead(self, lead: HotLead) -> bool:
         return self._exists("sent_leads", "lead_key", self.lead_key(lead))
+
+    def has_sent_username(self, username: str) -> bool:
+        return self._exists("sent_leads", "username", username.lower())
 
     def mark_sent_lead(self, lead: HotLead) -> None:
         with self._connect() as conn:
@@ -105,10 +124,12 @@ class StorageService:
                     post_url TEXT PRIMARY KEY,
                     donor_username TEXT NOT NULL,
                     comments_count INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'DONE',
                     processed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            self._ensure_column(conn, "processed_posts", "status", "TEXT NOT NULL DEFAULT 'DONE'")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS processed_comments (
@@ -140,3 +161,14 @@ class StorageService:
 
     def _normalize_text(self, value: str) -> str:
         return " ".join(value.casefold().split())
+
+    def _ensure_column(
+        self,
+        conn: sqlite3.Connection,
+        table: str,
+        column: str,
+        definition: str,
+    ) -> None:
+        columns = [row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+        if column not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
