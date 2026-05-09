@@ -44,11 +44,12 @@ class Settings(BaseSettings):
     )
     seed_donors: str = Field(default="", alias="SEED_DONORS")
     min_donor_followers: int = Field(default=5000, alias="MIN_DONOR_FOLLOWERS")
+    donor_posts_lookback: int = Field(default=50, alias="DONOR_POSTS_LOOKBACK")
 
     auto_hunt_enabled: bool = Field(default=True, alias="AUTO_HUNT_ENABLED")
     auto_hunt_interval_hours: int = Field(default=24, alias="AUTO_HUNT_INTERVAL_HOURS")
     auto_hunt_start_on_boot: bool = Field(default=False, alias="AUTO_HUNT_START_ON_BOOT")
-    auto_hunt_max_donors: int = Field(default=3, alias="AUTO_HUNT_MAX_DONORS")
+    auto_hunt_max_donors: int = Field(default=8, alias="AUTO_HUNT_MAX_DONORS")
     auto_hunt_max_comments_per_post: int = Field(default=100, alias="AUTO_HUNT_MAX_COMMENTS_PER_POST")
     auto_hunt_max_leads: int = Field(default=10, alias="AUTO_HUNT_MAX_LEADS")
     comment_fetch_growth_factor: int = Field(default=2, alias="COMMENT_FETCH_GROWTH_FACTOR")

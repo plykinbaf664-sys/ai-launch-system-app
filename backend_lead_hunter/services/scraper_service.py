@@ -31,7 +31,7 @@ class ScraperService:
         payload = {
             "directUrls": [f"https://www.instagram.com/{competitor_username}/"],
             "resultsType": "posts",
-            "resultsLimit": 12,
+            "resultsLimit": self._settings.donor_posts_lookback,
             "addParentData": False,
         }
         items = await self._apify_client.run_actor_and_get_items(
@@ -59,8 +59,6 @@ class ScraperService:
             if is_business:
                 logger.info("Пост экспертный, беру в работу: %s", post.url)
                 target_posts.append(post)
-                if len(target_posts) >= 3:
-                    break
             else:
                 logger.info("Пост не похож на бизнесовый, пропускаю: %s", post.url)
 

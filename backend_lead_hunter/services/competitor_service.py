@@ -15,26 +15,30 @@ class CompetitorService:
 
     async def find_competitors(self, keywords: list[str], max_competitors: int) -> list[str]:
         donors: list[str] = []
-
-        for username in self._settings.seed_donor_list:
-            if len(donors) >= max_competitors:
-                return donors
-            if username in donors:
-                continue
-            if await self._seed_donor_is_valid(username):
-                logger.info("Добавил донора из SEED_DONORS: @%s", username)
-                donors.append(username)
-
         search_keywords = self._merge_keywords(self._settings.similar_donor_keyword_list, keywords)
-        if self._settings.seed_donor_list:
-            logger.info(
-                "Ищу похожих доноров по SIMILAR_DONOR_KEYWORDS и ключам: %s",
-                ", ".join(search_keywords),
-            )
 
+        logger.info("Ищу доноров автоматически по ключам: %s", ", ".join(search_keywords))
+        await self._search_donors_by_keywords(search_keywords, donors, max_competitors)
+
+        if len(donors) < max_competitors:
+            logger.info(
+                "Автопоиск нашел %s/%s доноров, добираю fallback из SEED_DONORS",
+                len(donors),
+                max_competitors,
+            )
+            await self._add_seed_fallback_donors(donors, max_competitors)
+
+        return donors
+
+    async def _search_donors_by_keywords(
+        self,
+        search_keywords: list[str],
+        donors: list[str],
+        max_competitors: int,
+    ) -> None:
         for keyword in search_keywords:
             if len(donors) >= max_competitors:
-                return donors
+                return
 
             logger.info("Ищу доноров по ключу: %s", keyword)
             payload = {
@@ -50,7 +54,7 @@ class CompetitorService:
 
             for item in items:
                 if len(donors) >= max_competitors:
-                    return donors
+                    return
 
                 username = self._extract_username(item)
                 followers_count = self._extract_followers_count(item)
@@ -64,7 +68,15 @@ class CompetitorService:
                 logger.info("Нашел донора: @%s (%s подписчиков)", username, followers_count)
                 donors.append(username)
 
-        return donors
+    async def _add_seed_fallback_donors(self, donors: list[str], max_competitors: int) -> None:
+        for username in self._settings.seed_donor_list:
+            if len(donors) >= max_competitors:
+                return
+            if username in donors:
+                continue
+            if await self._seed_donor_is_valid(username):
+                logger.info("Добавил fallback-донора из SEED_DONORS: @%s", username)
+                donors.append(username)
 
     async def _seed_donor_is_valid(self, username: str) -> bool:
         payload = {
