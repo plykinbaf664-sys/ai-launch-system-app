@@ -4,6 +4,44 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+## Git Branch Workflow
+
+Before starting any code or documentation task:
+
+1. Identify the project area for the task:
+
+```text
+neurocloser
+research-ai
+leadgen
+shared
+infra
+docs
+```
+
+2. Tell the user which area the task belongs to.
+3. Give the exact Git Bash commands to create the branch for the current task.
+4. Do not start editing files until the user has created or confirmed the correct branch.
+
+Branch command template:
+
+```bash
+git checkout main
+git pull
+git checkout -b <area>/<task-name>
+```
+
+Examples:
+
+```bash
+git checkout -b neurocloser/improve-first-reply
+git checkout -b research-ai/fix-reviews-table
+git checkout -b leadgen/add-source-filter
+git checkout -b docs/update-readme
+```
+
+Use `main` only as the stable base. Feature and documentation work should happen in task branches.
+
 # Правила проекта
 
 # AI Launch System-это учебно-боевой Next.js-проект, который я собираю в формате AI-first.
