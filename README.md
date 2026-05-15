@@ -495,4 +495,173 @@ Pattern Analyzer = что делать
   - dedupe по постам/комментариям/лидам подключен;
   - автоохота не стартует сама после ребута;
   - суточный цикл активируется после ручного запуска.
+________________________________________________________
 
+15.05 Изменил структуру проекта плюс пошаговый план работы теперь!
+
+Как теперь работать с проектом
+
+У нас один репозиторий, но внутри него несколько зон:
+
+neurocloser     нейроклозер
+research-ai     ресерч AI
+leadgen         лидогенератор
+main            основная стабильная версия
+
+main это база.
+В задачах мы работаем не в main, а в отдельной ветке.
+
+Главное правило
+
+Одна задача = одна ветка
+
+Например:
+
+neurocloser/improve-first-reply
+research-ai/fix-table
+leadgen/add-filter
+
+Обычный сценарий
+
+1. Перейти в main:
+
+git checkout main
+
+1. Забрать свежую версию с GitHub:
+
+git pull
+
+1. Создать ветку под задачу:
+
+git checkout -b neurocloser/improve-first-reply
+
+1. После этого мы работаем в Codex и меняем код.
+2. Проверить, что изменилось:
+
+git status
+
+1. Добавить изменения:
+
+git add .
+
+Или лучше точечно:
+
+git add app/api/telegram lib/neiroclozer
+
+1. Сделать коммит:
+
+git commit -m "neurocloser: improve first reply"
+
+1. Запушить ветку на GitHub:
+
+git push -u origin neurocloser/improve-first-reply
+
+Что делать на GitHub
+
+После пуша ветки:
+
+1. Открываешь GitHub.
+2. Открываешь репозиторий.
+3. Видишь кнопку:
+    
+    Compare & pull request
+    
+4. Нажимаешь ее.
+5. Нажимаешь:
+    
+    Create pull request
+    
+6. Потом:
+    
+    Merge pull request
+    
+7. Потом:
+    
+    Confirm merge
+    
+
+После этого задача попала в main.
+
+После merge
+
+На компьютере обновляешь main:
+
+git checkout main
+git pull
+
+Теперь можно начинать следующую задачу:
+
+git checkout -b neurocloser/next-task
+
+Важно про push
+
+После работы в ветке нейроклозера ты пушишь только эту ветку:
+
+git push -u origin neurocloser/improve-first-reply
+
+main пушить не надо.
+
+main обновляется после Pull Request на GitHub.
+Потом ты просто делаешь:
+
+git checkout main
+git pull
+
+Где смотреть ветки
+
+Локально:
+
+git branch
+
+На GitHub ветка появится только после:
+
+git push -u origin название-ветки
+
+Пример для нейроклозера
+
+Начать задачу:
+
+git checkout main
+git pull
+git checkout -b neurocloser/improve-first-reply
+
+После изменений:
+
+git status
+git add app/api/telegram lib/neiroclozer lib/supabase-rest.ts lib/telegram.ts
+git commit -m "neurocloser: improve first reply"
+git push -u origin neurocloser/improve-first-reply
+
+Потом GitHub:
+
+Compare & pull request
+Create pull request
+Merge pull request
+Confirm merge
+
+Потом локально:
+
+git checkout main
+git pull
+
+Самая короткая схема
+
+main
+-> создать ветку задачи
+-> поработать
+-> commit
+-> push ветки
+-> Pull Request на GitHub
+-> Merge в main
+-> git checkout main
+-> git pull
+-> следующая задача
+
+Запомнить проще всего так
+
+main = чистая база
+ветка = место для работы
+push = отправить ветку на GitHub
+pull request = предложить добавить ветку в main
+merge = добавить ветку в main
+pull = забрать свежий main себе
