@@ -1,5 +1,0 @@
-INFO:     Started server process [10940]
-INFO:     Waiting for application startup.
-2026-05-09 02:57:18,273 | INFO | main | Автозапуск включен: каждые 24 часов, start_on_boot=False
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
