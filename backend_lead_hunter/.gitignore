@@ -7,3 +7,6 @@ __pycache__/
 .server.*.log
 *.db
 *.db-journal
+*.session
+*.session-journal
+telegram_vacancy_leads*.csv
