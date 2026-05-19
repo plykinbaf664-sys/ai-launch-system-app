@@ -20,6 +20,7 @@ from services.gpt_service import GPTService
 from services.scraper_service import ScraperService
 from services.storage_service import StorageService
 from services.tg_service import TelegramService
+from telegram_public_web_scraper import run_scraper as run_telegram_public_web_scraper
 
 
 logging.basicConfig(
@@ -41,6 +42,7 @@ app = FastAPI(title="Instagram Lead Hunter", version="1.0.0")
 jobs: dict[str, JobState] = {}
 pipeline_lock = asyncio.Lock()
 hh_pipeline_lock = asyncio.Lock()
+telegram_pipeline_lock = asyncio.Lock()
 scheduler_task: asyncio.Task[None] | None = None
 hh_scheduler_task: asyncio.Task[None] | None = None
 auto_hunt_armed = False
@@ -232,8 +234,10 @@ async def index() -> str:
 
       <div class="actions">
         <button id="submitButton" type="submit">Запустить охоту</button>
+        <button id="telegramButton" class="secondary" type="button">Лиды ТГ</button>
         <button id="hhButton" class="secondary" type="button">Лиды HH</button>
       </div>
+      <a class="download" href="/download-telegram-leads">Скачать CSV лидов ТГ</a>
       <a class="download" href="/download-hh-leads">Скачать CSV лидов HH</a>
     </form>
 
@@ -245,6 +249,7 @@ async def index() -> str:
     const form = document.getElementById("huntForm");
     const statusBox = document.getElementById("status");
     const button = document.getElementById("submitButton");
+    const telegramButton = document.getElementById("telegramButton");
     const hhButton = document.getElementById("hhButton");
     let timer = null;
 
@@ -263,6 +268,8 @@ async def index() -> str:
       if (!response.ok) {{
         clearInterval(timer);
         button.disabled = false;
+        telegramButton.disabled = false;
+        hhButton.disabled = false;
         setStatus(`Задача: ${{jobId}}\\nСтатус: не найдено\\nДетали: ${{data.detail || "Сервер перезапускался, статус этой задачи больше не хранится. Запусти охоту заново."}}`, "err");
         return;
       }}
@@ -272,12 +279,16 @@ async def index() -> str:
       if (data.status === "SUCCEEDED") {{
         clearInterval(timer);
         button.disabled = false;
+        telegramButton.disabled = false;
+        hhButton.disabled = false;
         setStatus(`Задача: ${{jobId}}\\nСтатус: ${{data.status}}\\nДетали: ${{data.detail}}`, "ok");
       }}
 
       if (data.status === "FAILED" || data.status === "SKIPPED") {{
         clearInterval(timer);
         button.disabled = false;
+        telegramButton.disabled = false;
+        hhButton.disabled = false;
         setStatus(`Задача: ${{jobId}}\\nСтатус: ${{data.status}}\\nДетали: ${{data.detail}}`, "err");
       }}
     }}
@@ -286,6 +297,8 @@ async def index() -> str:
       event.preventDefault();
       clearInterval(timer);
       button.disabled = true;
+      telegramButton.disabled = true;
+      hhButton.disabled = true;
       setStatus("Запускаю pipeline...");
 
       const payload = {{
@@ -312,12 +325,46 @@ async def index() -> str:
         await pollJob(data.job_id);
       }} catch (error) {{
         button.disabled = false;
+        telegramButton.disabled = false;
+        hhButton.disabled = false;
+        setStatus(error.message, "err");
+      }}
+    }});
+
+    telegramButton.addEventListener("click", async () => {{
+      clearInterval(timer);
+      button.disabled = true;
+      telegramButton.disabled = true;
+      hhButton.disabled = true;
+      setStatus("Запускаю сбор лидов из Telegram...");
+
+      try {{
+        const response = await fetch("/hunt-telegram-leads", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+        }});
+
+        const data = await response.json();
+        if (!response.ok) {{
+          throw new Error(data.detail || "Не удалось запустить сбор лидов из Telegram");
+        }}
+
+        setStatus(`Задача запущена: ${{data.job_id}}\\n${{data.message}}`);
+        timer = setInterval(() => pollJob(data.job_id), 5000);
+        await pollJob(data.job_id);
+      }} catch (error) {{
+        button.disabled = false;
+        telegramButton.disabled = false;
+        hhButton.disabled = false;
         setStatus(error.message, "err");
       }}
     }});
 
     hhButton.addEventListener("click", async () => {{
       clearInterval(timer);
+      button.disabled = true;
+      telegramButton.disabled = true;
+      hhButton.disabled = true;
       setStatus("Запускаю сбор лидов с HeadHunter...");
 
       try {{
@@ -335,6 +382,9 @@ async def index() -> str:
         timer = setInterval(() => pollJob(data.job_id), 5000);
         await pollJob(data.job_id);
       }} catch (error) {{
+        button.disabled = false;
+        telegramButton.disabled = false;
+        hhButton.disabled = false;
         setStatus(error.message, "err");
       }}
     }});
@@ -377,6 +427,19 @@ async def hunt_hh_leads(background_tasks: BackgroundTasks) -> HuntResponse:
     )
 
 
+@app.post("/hunt-telegram-leads", response_model=HuntResponse)
+async def hunt_telegram_leads(background_tasks: BackgroundTasks) -> HuntResponse:
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = JobState(status="RUNNING", detail="Сбор лидов из Telegram запущен")
+    background_tasks.add_task(run_telegram_pipeline, job_id)
+
+    return HuntResponse(
+        job_id=job_id,
+        status="RUNNING",
+        message="Сбор лидов из Telegram запущен в фоне. Результат придет в CSV и Telegram-бота.",
+    )
+
+
 @app.get("/hunt-leads/{job_id}", response_model=JobState)
 async def get_job_state(job_id: str) -> JobState:
     job = jobs.get(job_id)
@@ -395,6 +458,19 @@ async def download_hh_leads() -> FileResponse:
         output_path,
         media_type="text/csv; charset=utf-8",
         filename="hh_vacancy_leads.csv",
+    )
+
+
+@app.get("/download-telegram-leads")
+async def download_telegram_leads() -> FileResponse:
+    output_path = Path(os.getenv("TG_SCRAPER_OUTPUT_CSV", "telegram_vacancy_leads.csv"))
+    if not output_path.exists():
+        raise HTTPException(status_code=404, detail="CSV еще не создан. Сначала нажми кнопку Лиды ТГ.")
+
+    return FileResponse(
+        output_path,
+        media_type="text/csv; charset=utf-8",
+        filename="telegram_vacancy_leads.csv",
     )
 
 
@@ -417,6 +493,28 @@ async def run_hh_pipeline(job_id: str) -> None:
             logger.info("HH pipeline завершен. Найдено лидов: %s", sent_count)
         except Exception as exc:
             logger.exception("HH pipeline упал с ошибкой")
+            jobs[job_id] = JobState(status="FAILED", detail=str(exc))
+
+
+async def run_telegram_pipeline(job_id: str) -> None:
+    if telegram_pipeline_lock.locked():
+        jobs[job_id] = JobState(
+            status="SKIPPED",
+            detail="Сбор Telegram-лидов уже идет. Новый запуск пропущен.",
+        )
+        logger.info("Telegram pipeline %s пропущен: уже идет другой сбор", job_id)
+        return
+
+    async with telegram_pipeline_lock:
+        try:
+            sent_count = await run_telegram_public_web_scraper()
+            jobs[job_id] = JobState(
+                status="SUCCEEDED",
+                detail=f"Сбор Telegram-лидов завершен. Найдено и обработано: {sent_count}.",
+            )
+            logger.info("Telegram pipeline завершен. Найдено лидов: %s", sent_count)
+        except Exception as exc:
+            logger.exception("Telegram pipeline упал с ошибкой")
             jobs[job_id] = JobState(status="FAILED", detail=str(exc))
 
 
