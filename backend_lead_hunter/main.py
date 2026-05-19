@@ -96,121 +96,283 @@ async def index() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Instagram Lead Hunter</title>
+  <title>Leadgen Command Center</title>
   <style>
     :root {{
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --text: #17181c;
-      --muted: #68707d;
-      --line: #d9dee7;
-      --accent: #1769e0;
-      --accent-dark: #1256b7;
-      --bad: #b3261e;
-      --good: #12733b;
+      --bg: #080808;
+      --panel: rgba(17,17,17,.72);
+      --text: #ffffff;
+      --muted: #888888;
+      --line: rgba(0,240,255,.18);
+      --accent: #00f0ff;
+      --accent-soft: rgba(0,240,255,.12);
+      --bad: #ff5e7a;
+      --good: #00ff99;
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background:
+        radial-gradient(circle at 20% 10%, rgba(0,240,255,.08), transparent 18%),
+        radial-gradient(circle at 85% 20%, rgba(0,240,255,.05), transparent 18%),
+        radial-gradient(circle at 58% 92%, rgba(0,255,153,.045), transparent 22%),
+        linear-gradient(180deg, #080808 0%, #0a0a0a 100%);
       color: var(--text);
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      padding: 32px 16px;
+      font-family: Inter, Arial, sans-serif;
+      padding: 34px 18px 42px;
+      overflow-x: hidden;
+    }}
+    body::before {{
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      content: "";
+      background-image:
+        linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: linear-gradient(180deg, black, transparent 92%);
+    }}
+    body::after {{
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      content: "";
+      background: repeating-linear-gradient(180deg, rgba(255,255,255,.022) 0, rgba(255,255,255,.022) 1px, transparent 1px, transparent 7px);
+      opacity: .18;
     }}
     main {{
-      width: min(760px, 100%);
+      position: relative;
+      z-index: 2;
+      width: min(1180px, 100%);
+      margin: 0 auto;
       background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 24px;
-      box-shadow: 0 12px 32px rgba(20, 30, 50, 0.08);
+      border: 1px solid rgba(0,240,255,.18);
+      padding: 34px;
+      box-shadow: 0 0 32px rgba(0,240,255,.14), 0 12px 40px rgba(0,0,0,.45);
+      backdrop-filter: blur(14px);
+      clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 0 100%);
     }}
-    h1 {{ margin: 0 0 8px; font-size: 28px; line-height: 1.2; }}
-    p {{ margin: 0 0 20px; color: var(--muted); line-height: 1.5; }}
-    label {{ display: block; margin: 16px 0 6px; font-weight: 700; }}
+    h1 {{ margin: 0 0 14px; font-size: 64px; line-height: .92; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }}
+    p {{ margin: 0 0 20px; color: #c5d4d7; line-height: 1.6; }}
+    label {{ display: block; margin: 16px 0 8px; color: var(--accent); font-family: Consolas, monospace; font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }}
     textarea, input {{
       width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 6px;
+      border: 1px solid rgba(0,240,255,.18);
+      border-radius: 0;
       padding: 11px 12px;
       font: inherit;
       color: var(--text);
-      background: #fff;
+      outline: none;
+      background: rgba(255,255,255,.035);
+      box-shadow: inset 0 0 20px rgba(0,240,255,.035);
+    }}
+    textarea:focus, input:focus {{
+      border-color: rgba(0,240,255,.45);
+      box-shadow: 0 0 24px rgba(0,240,255,.14), inset 0 0 20px rgba(0,240,255,.06);
     }}
     textarea {{ min-height: 120px; resize: vertical; }}
     .grid {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
     }}
     button {{
+      position: relative;
+      overflow: hidden;
       margin-top: 20px;
       width: 100%;
-      border: 0;
-      border-radius: 6px;
+      border: 1px solid rgba(0,240,255,.28);
+      border-radius: 0;
       padding: 13px 16px;
-      background: var(--accent);
+      background: linear-gradient(90deg, rgba(0,240,255,.22), rgba(0,255,153,.12));
       color: #fff;
-      font: inherit;
-      font-weight: 700;
+      font: 800 13px Consolas, monospace;
+      letter-spacing: 0;
+      text-transform: uppercase;
       cursor: pointer;
+      transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
     }}
-    button:hover {{ background: var(--accent-dark); }}
+    button::after, .download::after {{
+      position: absolute;
+      inset: 0;
+      content: "";
+      background: linear-gradient(120deg, transparent, rgba(255,255,255,.24), transparent);
+      transform: translateX(-120%);
+      transition: transform 700ms ease;
+    }}
+    button:hover, .download:hover {{
+      transform: translateY(-2px);
+      border-color: rgba(0,240,255,.46);
+      box-shadow: 0 0 36px rgba(0,240,255,.2);
+    }}
+    button:hover::after, .download:hover::after {{
+      transform: translateX(120%);
+    }}
     button:disabled {{ opacity: .65; cursor: wait; }}
     .actions {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
     }}
     .secondary {{
-      background: #0f766e;
-    }}
-    .secondary:hover {{
-      background: #115e59;
+      background: rgba(255,255,255,.045);
     }}
     .download {{
+      position: relative;
+      overflow: hidden;
       display: block;
       margin-top: 12px;
       width: 100%;
-      border-radius: 6px;
-      border: 1px solid var(--line);
+      border-radius: 0;
+      border: 1px solid rgba(0,240,255,.18);
       padding: 12px 16px;
       text-align: center;
       text-decoration: none;
-      font-weight: 700;
+      font: 800 13px Consolas, monospace;
+      letter-spacing: 0;
+      text-transform: uppercase;
       color: var(--text);
-      background: #fff;
-    }}
-    .download:hover {{
-      border-color: var(--accent);
-      color: var(--accent);
+      background: rgba(255,255,255,.035);
     }}
     .status {{
-      margin-top: 18px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 14px;
-      background: #fbfcfe;
+      margin-top: 22px;
+      border: 1px solid rgba(0,240,255,.18);
+      padding: 16px;
+      background: rgba(17,17,17,.72);
+      box-shadow: 0 0 32px rgba(0,240,255,.14);
+      backdrop-filter: blur(14px);
       white-space: pre-wrap;
       line-height: 1.5;
+      color: #d7fbff;
     }}
     .ok {{ color: var(--good); }}
     .err {{ color: var(--bad); }}
+    .source-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 22px;
+    }}
+    .source-card {{
+      min-height: 154px;
+      border: 1px solid rgba(0,240,255,.18);
+      padding: 18px;
+      background: rgba(17,17,17,.72);
+      box-shadow: 0 0 32px rgba(0,240,255,.14), 0 12px 40px rgba(0,0,0,.45);
+      backdrop-filter: blur(14px);
+      transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+    }}
+    .source-card:hover {{
+      transform: translateY(-4px);
+      border-color: rgba(0,240,255,.42);
+      box-shadow: 0 0 42px rgba(0,240,255,.2), 0 16px 52px rgba(0,0,0,.55);
+    }}
+    .source-card strong {{
+      display: block;
+      margin-top: 18px;
+      font-size: 40px;
+      line-height: 1;
+    }}
+    .source-card p {{
+      min-height: 42px;
+      margin: 10px 0 14px;
+      color: #b3b3b3;
+      line-height: 1.45;
+    }}
+    .panel-label {{
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--accent);
+      font: 700 12px Consolas, monospace;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }}
+    .live {{ color: var(--good); }}
+    .signal {{
+      height: 6px;
+      overflow: hidden;
+      background: rgba(255,255,255,.07);
+    }}
+    .signal span {{
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--good));
+      box-shadow: 0 0 18px rgba(0,240,255,.52);
+    }}
+    .cursor-glow {{
+      position: fixed;
+      z-index: 1;
+      width: 380px;
+      height: 380px;
+      border-radius: 50%;
+      pointer-events: none;
+      background: radial-gradient(circle, rgba(0,240,255,.12) 0%, rgba(0,240,255,.05) 24%, transparent 68%);
+      filter: blur(20px);
+      transform: translate3d(-999px, -999px, 0);
+      transition: transform 120ms linear;
+    }}
+    .ai-entity {{
+      position: fixed;
+      z-index: 4;
+      width: 96px;
+      height: 96px;
+      pointer-events: none;
+      transform: translate3d(72vw, 20vh, 0);
+    }}
+    .ai-core, .ai-ring, .ai-scan {{
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+    }}
+    .ai-core {{
+      background: radial-gradient(circle, rgba(255,255,255,.82), rgba(0,240,255,.28) 26%, transparent 62%);
+      box-shadow: 0 0 54px rgba(0,240,255,.42);
+      animation: entity-float 5s ease-in-out infinite;
+    }}
+    .ai-ring {{
+      border: 1px solid rgba(0,240,255,.42);
+      transform: scale(.82);
+      animation: rotate 8s linear infinite;
+    }}
+    .ai-scan {{
+      border-top: 1px solid rgba(255,255,255,.5);
+      animation: scan 2.6s ease-in-out infinite;
+    }}
+    main > p:nth-of-type(2) {{ display: none; }}
+    @keyframes rotate {{ to {{ rotate: 360deg; }} }}
+    @keyframes entity-float {{
+      0%, 100% {{ transform: translateY(0) scale(1); }}
+      50% {{ transform: translateY(-10px) scale(1.04); }}
+    }}
+    @keyframes scan {{
+      0%, 100% {{ transform: rotate(0deg) scale(.86); opacity: .3; }}
+      50% {{ transform: rotate(180deg) scale(1.1); opacity: .86; }}
+    }}
     a {{ color: var(--accent); }}
     @media (max-width: 640px) {{
-      main {{ padding: 18px; }}
+      body {{ padding: 18px; }}
+      main {{ padding: 22px; }}
       .grid {{ grid-template-columns: 1fr; }}
       .actions {{ grid-template-columns: 1fr; }}
-      h1 {{ font-size: 24px; }}
+      .source-grid {{ grid-template-columns: 1fr; }}
+      h1 {{ font-size: 42px; }}
     }}
   </style>
 </head>
 <body>
+  <div class="cursor-glow" id="cursorGlow"></div>
+  <div class="ai-entity" id="aiEntity" aria-hidden="true">
+    <div class="ai-core"></div>
+    <div class="ai-ring"></div>
+    <div class="ai-scan"></div>
+  </div>
   <main>
-    <h1>Instagram Lead Hunter</h1>
+    <p class="panel-label"><span>LEADGEN OPERATING SYSTEM</span><span class="live">ACTIVE</span></p>
+    <h1>Neural Lead Command Center</h1>
+    <p>Control panel for Instagram, Telegram and HeadHunter lead capture. Strict filtering, dedupe memory, CSV export and Telegram delivery stay connected to the same backend routes.</p>
     <p>Запуск поиска лидов через Apify, GPT и Telegram. Ключи вводи через запятую или с новой строки.</p>
 
     <form id="huntForm">
@@ -241,6 +403,27 @@ async def index() -> str:
       <a class="download" href="/download-hh-leads">Скачать CSV лидов HH</a>
     </form>
 
+    <section class="source-grid" aria-label="Lead sources">
+      <article class="source-card">
+        <div class="panel-label"><span>Instagram</span><span class="live">LIVE</span></div>
+        <strong>IG</strong>
+        <p>Donor search, comments, GPT qualification and bot delivery.</p>
+        <div class="signal"><span style="width:87%"></span></div>
+      </article>
+      <article class="source-card">
+        <div class="panel-label"><span>Telegram</span><span>SCAN</span></div>
+        <strong>TG</strong>
+        <p>Public channel scraper with strict vacancy filters and contact extraction.</p>
+        <div class="signal"><span style="width:64%"></span></div>
+      </article>
+      <article class="source-card">
+        <div class="panel-label"><span>HeadHunter</span><span>5H LOOP</span></div>
+        <strong>HH</strong>
+        <p>Fresh vacancy search, 20-result batches and duplicate memory.</p>
+        <div class="signal"><span style="width:92%"></span></div>
+      </article>
+    </section>
+
     <div id="status" class="status">Готов к запуску.</div>
     <p style="margin-top:16px">Техническая документация: <a href="/docs">/docs</a></p>
   </main>
@@ -251,7 +434,38 @@ async def index() -> str:
     const button = document.getElementById("submitButton");
     const telegramButton = document.getElementById("telegramButton");
     const hhButton = document.getElementById("hhButton");
+    const cursorGlow = document.getElementById("cursorGlow");
+    const aiEntity = document.getElementById("aiEntity");
     let timer = null;
+    let targetX = window.innerWidth * 0.72;
+    let targetY = window.innerHeight * 0.2;
+    let entityX = targetX;
+    let entityY = targetY;
+
+    document.querySelector('label[for="keywords"]').textContent = "Instagram intent keywords";
+    document.querySelector('label[for="maxCompetitors"]').textContent = "Donors";
+    document.querySelector('label[for="maxComments"]').textContent = "Comment scan limit";
+    document.querySelector('label[for="maxLeads"]').textContent = "Leads per run";
+    button.textContent = "Run Instagram";
+    telegramButton.textContent = "Run Telegram";
+    hhButton.textContent = "Run HH";
+    document.querySelector('a[href="/download-telegram-leads"]').textContent = "Download TG CSV";
+    document.querySelector('a[href="/download-hh-leads"]').textContent = "Download HH CSV";
+    statusBox.textContent = "SYSTEM READY\\nAwaiting command.";
+
+    window.addEventListener("pointermove", (event) => {{
+      targetX = event.clientX;
+      targetY = event.clientY;
+      cursorGlow.style.transform = `translate3d(${{event.clientX - 190}}px, ${{event.clientY - 190}}px, 0)`;
+    }});
+
+    function followEntity() {{
+      entityX += (targetX - entityX + 130) * 0.035;
+      entityY += (targetY - entityY - 90) * 0.035;
+      aiEntity.style.transform = `translate3d(${{entityX}}px, ${{entityY}}px, 0)`;
+      window.requestAnimationFrame(followEntity);
+    }}
+    followEntity();
 
     function parseKeywords(value) {{
       return value.split(/[\\n,]+/).map((item) => item.trim()).filter(Boolean);

@@ -1,0 +1,511 @@
+.shell {
+  --bg: #080808;
+  --bg-2: #0f0f10;
+  --card: rgba(17, 17, 17, 0.72);
+  --accent: #00f0ff;
+  --accent-soft: rgba(0, 240, 255, 0.12);
+  --text: #ffffff;
+  --muted: #888888;
+  --danger: #ff5e7a;
+  --success: #00ff99;
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(0, 240, 255, 0.08), transparent 18%),
+    radial-gradient(circle at 85% 20%, rgba(0, 240, 255, 0.05), transparent 18%),
+    radial-gradient(circle at 55% 85%, rgba(0, 255, 153, 0.05), transparent 22%),
+    linear-gradient(180deg, var(--bg) 0%, #0a0a0a 100%);
+  color: var(--text);
+  font-family: var(--font-geist-sans), Inter, system-ui, sans-serif;
+  padding: 34px;
+}
+
+.gridLayer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(180deg, black, transparent 92%);
+}
+
+.gridLayer::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.025) 0,
+    rgba(255, 255, 255, 0.025) 1px,
+    transparent 1px,
+    transparent 7px
+  );
+  opacity: 0.18;
+}
+
+.cursorGlow {
+  position: fixed;
+  z-index: 1;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(0, 240, 255, 0.12) 0%,
+    rgba(0, 240, 255, 0.05) 24%,
+    transparent 68%
+  );
+  filter: blur(20px);
+  transition: transform 120ms linear;
+}
+
+.hero,
+.sourceGrid,
+.controlDeck {
+  position: relative;
+  z-index: 2;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.75fr);
+  gap: 28px;
+  align-items: stretch;
+  max-width: 1180px;
+  margin: 0 auto;
+  min-height: 58vh;
+}
+
+.heroCopy,
+.corePanel,
+.sourceCard,
+.terminal,
+.metrics {
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  background: var(--card);
+  box-shadow: 0 0 32px rgba(0, 240, 255, 0.14), 0 12px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+}
+
+.heroCopy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 520px;
+  padding: 56px;
+  clip-path: polygon(0 0, calc(100% - 30px) 0, 100% 30px, 100% 100%, 0 100%);
+}
+
+.kicker,
+.panelHeader,
+.cardTopline,
+.terminalLine code,
+.metrics span,
+.sourceCard small {
+  font-family: var(--font-geist-mono), "JetBrains Mono", monospace;
+  letter-spacing: 0;
+}
+
+.kicker {
+  margin: 0 0 18px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.hero h1 {
+  max-width: 780px;
+  margin: 0;
+  font-size: 92px;
+  line-height: 0.9;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.lead {
+  max-width: 620px;
+  margin: 26px 0 0;
+  color: #c5d4d7;
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+.commandRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 34px;
+}
+
+.primaryCommand,
+.ghostCommand {
+  position: relative;
+  overflow: hidden;
+  min-height: 48px;
+  padding: 14px 18px;
+  border: 1px solid rgba(0, 240, 255, 0.28);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.primaryCommand {
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.22), rgba(0, 255, 153, 0.12));
+  box-shadow: 0 0 28px rgba(0, 240, 255, 0.2);
+}
+
+.ghostCommand {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.primaryCommand::after,
+.ghostCommand::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.24), transparent);
+  transform: translateX(-120%);
+  transition: transform 700ms ease;
+}
+
+.primaryCommand:hover::after,
+.ghostCommand:hover::after {
+  transform: translateX(120%);
+}
+
+.corePanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px;
+  min-height: 520px;
+}
+
+.panelHeader,
+.cardTopline {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.liveDot {
+  color: var(--success);
+}
+
+.reactor {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 330px;
+}
+
+.reactorOrb {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.92), rgba(0, 240, 255, 0.58) 18%, transparent 58%),
+    radial-gradient(circle, rgba(0, 255, 153, 0.2), transparent 65%);
+  box-shadow: 0 0 70px rgba(0, 240, 255, 0.46);
+  animation: pulse 3.8s ease-in-out infinite;
+}
+
+.orbitOne,
+.orbitTwo,
+.orbitThree {
+  position: absolute;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 50%;
+  animation: rotate 12s linear infinite;
+}
+
+.orbitOne {
+  width: 250px;
+  height: 120px;
+}
+
+.orbitTwo {
+  width: 300px;
+  height: 160px;
+  transform: rotate(58deg);
+  animation-duration: 16s;
+}
+
+.orbitThree {
+  width: 210px;
+  height: 300px;
+  animation-duration: 20s;
+}
+
+.diagnostics {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 18px;
+  color: var(--muted);
+}
+
+.diagnostics strong {
+  color: var(--success);
+}
+
+.sourceGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  max-width: 1180px;
+  margin: 22px auto 0;
+}
+
+.sourceCard {
+  padding: 22px;
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.sourceCard:hover {
+  transform: translateY(-4px) scale(1.01);
+  border-color: rgba(0, 240, 255, 0.42);
+  box-shadow: 0 0 42px rgba(0, 240, 255, 0.2), 0 16px 52px rgba(0, 0, 0, 0.55);
+}
+
+.sourceCard strong {
+  display: block;
+  margin-top: 30px;
+  font-size: 54px;
+  line-height: 1;
+}
+
+.sourceCard p {
+  min-height: 48px;
+  margin: 12px 0 18px;
+  color: #b3b3b3;
+  line-height: 1.5;
+}
+
+.signalTrack {
+  height: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.signalTrack span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--success));
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.52);
+}
+
+.sourceCard small {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+}
+
+.controlDeck {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 18px;
+  max-width: 1180px;
+  margin: 18px auto 0;
+}
+
+.terminal,
+.metrics {
+  padding: 22px;
+}
+
+.terminalLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  color: #c9f9ff;
+}
+
+.terminalLine span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 14px rgba(0, 255, 153, 0.8);
+}
+
+.terminalLine code {
+  font-size: 13px;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+}
+
+.metrics div {
+  display: flex;
+  min-height: 120px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.metrics span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.metrics strong {
+  color: var(--accent);
+  font-size: 34px;
+}
+
+.aiEntity {
+  position: fixed;
+  z-index: 3;
+  width: 120px;
+  height: 120px;
+  pointer-events: none;
+  filter: blur(0.2px);
+  transition: filter 240ms ease;
+}
+
+.entityCore,
+.entityRing,
+.entityScan {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.entityCore {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.82), rgba(0, 240, 255, 0.28) 26%, transparent 62%);
+  box-shadow: 0 0 54px rgba(0, 240, 255, 0.42);
+  animation: float 5s ease-in-out infinite;
+}
+
+.entityRing {
+  border: 1px solid rgba(0, 240, 255, 0.42);
+  transform: scale(0.82);
+  animation: rotate 8s linear infinite;
+}
+
+.entityScan {
+  border-top: 1px solid rgba(255, 255, 255, 0.5);
+  animation: scan 2.6s ease-in-out infinite;
+}
+
+.particle {
+  position: fixed;
+  z-index: 1;
+  border-radius: 50%;
+  pointer-events: none;
+  background: var(--accent);
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.72);
+  opacity: 0.2;
+  animation: particleDrift 8s ease-in-out infinite;
+}
+
+@keyframes rotate {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.82;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.04);
+  }
+}
+
+@keyframes scan {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(0.86);
+    opacity: 0.3;
+  }
+  50% {
+    transform: rotate(180deg) scale(1.1);
+    opacity: 0.86;
+  }
+}
+
+@keyframes particleDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.16;
+  }
+  50% {
+    transform: translate3d(22px, -34px, 0);
+    opacity: 0.52;
+  }
+}
+
+@media (max-width: 900px) {
+  .shell {
+    padding: 18px;
+  }
+
+  .hero,
+  .sourceGrid,
+  .controlDeck {
+    grid-template-columns: 1fr;
+  }
+
+  .heroCopy,
+  .corePanel {
+    min-height: auto;
+  }
+
+  .heroCopy {
+    padding: 34px 24px;
+  }
+
+  .hero h1 {
+    font-size: 54px;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .aiEntity {
+    width: 86px;
+    height: 86px;
+  }
+}
+
+@media (max-width: 520px) {
+  .hero h1 {
+    font-size: 42px;
+  }
+
+  .commandRow {
+    flex-direction: column;
+  }
+}
