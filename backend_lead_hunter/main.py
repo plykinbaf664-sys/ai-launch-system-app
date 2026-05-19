@@ -1,15 +1,18 @@
 import asyncio
 import contextlib
 import logging
+import os
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from config import get_settings
+from hh_html_scraper import run_scraper as run_hh_scraper
 from schemas import HotLead, HuntRequest, HuntResponse, JobState, ViralPost
 from services.apify_client import ApifyClient
 from services.competitor_service import CompetitorService
@@ -37,7 +40,9 @@ DEFAULT_UI_KEYWORDS = (
 app = FastAPI(title="Instagram Lead Hunter", version="1.0.0")
 jobs: dict[str, JobState] = {}
 pipeline_lock = asyncio.Lock()
+hh_pipeline_lock = asyncio.Lock()
 scheduler_task: asyncio.Task[None] | None = None
+hh_scheduler_task: asyncio.Task[None] | None = None
 auto_hunt_armed = False
 
 
@@ -50,18 +55,23 @@ class PostProcessResult:
 
 @app.on_event("startup")
 async def start_scheduler() -> None:
-    global scheduler_task
+    global scheduler_task, hh_scheduler_task
     settings = get_settings()
-    if not settings.auto_hunt_enabled:
-        logger.info("Автозапуск отключен: AUTO_HUNT_ENABLED=false")
-        return
+    if settings.auto_hunt_enabled:
+        scheduler_task = asyncio.create_task(auto_hunt_scheduler())
+        logger.info(
+            "Автозапуск Instagram включен: каждые %s часов, start_on_boot=%s",
+            settings.auto_hunt_interval_hours,
+            settings.auto_hunt_start_on_boot,
+        )
+    else:
+        logger.info("Автозапуск Instagram отключен: AUTO_HUNT_ENABLED=false")
 
-    scheduler_task = asyncio.create_task(auto_hunt_scheduler())
-    logger.info(
-        "Автозапуск включен: каждые %s часов, start_on_boot=%s",
-        settings.auto_hunt_interval_hours,
-        settings.auto_hunt_start_on_boot,
-    )
+    if hh_auto_enabled():
+        hh_scheduler_task = asyncio.create_task(hh_auto_scheduler())
+        logger.info("HH автозапуск включен: каждые %s часов", hh_auto_interval_hours())
+    else:
+        logger.info("HH автозапуск отключен: HH_SCRAPER_AUTO_ENABLED=false")
 
 
 @app.on_event("shutdown")
@@ -70,6 +80,10 @@ async def stop_scheduler() -> None:
         scheduler_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await scheduler_task
+    if hh_scheduler_task:
+        hh_scheduler_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await hh_scheduler_task
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -144,6 +158,34 @@ async def index() -> str:
     }}
     button:hover {{ background: var(--accent-dark); }}
     button:disabled {{ opacity: .65; cursor: wait; }}
+    .actions {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    .secondary {{
+      background: #0f766e;
+    }}
+    .secondary:hover {{
+      background: #115e59;
+    }}
+    .download {{
+      display: block;
+      margin-top: 12px;
+      width: 100%;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      padding: 12px 16px;
+      text-align: center;
+      text-decoration: none;
+      font-weight: 700;
+      color: var(--text);
+      background: #fff;
+    }}
+    .download:hover {{
+      border-color: var(--accent);
+      color: var(--accent);
+    }}
     .status {{
       margin-top: 18px;
       border: 1px solid var(--line);
@@ -159,6 +201,7 @@ async def index() -> str:
     @media (max-width: 640px) {{
       main {{ padding: 18px; }}
       .grid {{ grid-template-columns: 1fr; }}
+      .actions {{ grid-template-columns: 1fr; }}
       h1 {{ font-size: 24px; }}
     }}
   </style>
@@ -187,7 +230,11 @@ async def index() -> str:
         </div>
       </div>
 
-      <button id="submitButton" type="submit">Запустить охоту</button>
+      <div class="actions">
+        <button id="submitButton" type="submit">Запустить охоту</button>
+        <button id="hhButton" class="secondary" type="button">Лиды HH</button>
+      </div>
+      <a class="download" href="/download-hh-leads">Скачать CSV лидов HH</a>
     </form>
 
     <div id="status" class="status">Готов к запуску.</div>
@@ -198,6 +245,7 @@ async def index() -> str:
     const form = document.getElementById("huntForm");
     const statusBox = document.getElementById("status");
     const button = document.getElementById("submitButton");
+    const hhButton = document.getElementById("hhButton");
     let timer = null;
 
     function parseKeywords(value) {{
@@ -267,6 +315,29 @@ async def index() -> str:
         setStatus(error.message, "err");
       }}
     }});
+
+    hhButton.addEventListener("click", async () => {{
+      clearInterval(timer);
+      setStatus("Запускаю сбор лидов с HeadHunter...");
+
+      try {{
+        const response = await fetch("/hunt-hh-leads", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+        }});
+
+        const data = await response.json();
+        if (!response.ok) {{
+          throw new Error(data.detail || "Не удалось запустить сбор лидов с HeadHunter");
+        }}
+
+        setStatus(`Задача запущена: ${{data.job_id}}\n${{data.message}}`);
+        timer = setInterval(() => pollJob(data.job_id), 5000);
+        await pollJob(data.job_id);
+      }} catch (error) {{
+        setStatus(error.message, "err");
+      }}
+    }});
   </script>
 </body>
 </html>
@@ -293,12 +364,87 @@ async def hunt_leads(request: HuntRequest, background_tasks: BackgroundTasks) ->
     )
 
 
+@app.post("/hunt-hh-leads", response_model=HuntResponse)
+async def hunt_hh_leads(background_tasks: BackgroundTasks) -> HuntResponse:
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = JobState(status="RUNNING", detail="Сбор лидов с HeadHunter запущен")
+    background_tasks.add_task(run_hh_pipeline, job_id)
+
+    return HuntResponse(
+        job_id=job_id,
+        status="RUNNING",
+        message="Сбор лидов с HeadHunter запущен в фоне. Результат придет в CSV и Telegram-бота.",
+    )
+
+
 @app.get("/hunt-leads/{job_id}", response_model=JobState)
 async def get_job_state(job_id: str) -> JobState:
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Задача не найдена")
     return job
+
+
+@app.get("/download-hh-leads")
+async def download_hh_leads() -> FileResponse:
+    output_path = Path(os.getenv("HH_SCRAPER_OUTPUT_CSV", "hh_vacancy_leads.csv"))
+    if not output_path.exists():
+        raise HTTPException(status_code=404, detail="CSV еще не создан. Сначала нажми кнопку Лиды HH.")
+
+    return FileResponse(
+        output_path,
+        media_type="text/csv; charset=utf-8",
+        filename="hh_vacancy_leads.csv",
+    )
+
+
+async def run_hh_pipeline(job_id: str) -> None:
+    if hh_pipeline_lock.locked():
+        jobs[job_id] = JobState(
+            status="SKIPPED",
+            detail="Сбор HH-лидов уже идет. Новый запуск пропущен.",
+        )
+        logger.info("HH pipeline %s пропущен: уже идет другой сбор", job_id)
+        return
+
+    async with hh_pipeline_lock:
+        try:
+            sent_count = await run_hh_scraper()
+            jobs[job_id] = JobState(
+                status="SUCCEEDED",
+                detail=f"Сбор HH-лидов завершен. Найдено и обработано: {sent_count}.",
+            )
+            logger.info("HH pipeline завершен. Найдено лидов: %s", sent_count)
+        except Exception as exc:
+            logger.exception("HH pipeline упал с ошибкой")
+            jobs[job_id] = JobState(status="FAILED", detail=str(exc))
+
+
+async def hh_auto_scheduler() -> None:
+    while True:
+        await asyncio.sleep(hh_auto_interval_hours() * 60 * 60)
+        await schedule_hh_hunt("auto-hh")
+
+
+async def schedule_hh_hunt(source: str) -> str:
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = JobState(status="RUNNING", detail=f"HH автосбор запущен: {source}")
+    asyncio.create_task(run_hh_pipeline(job_id))
+    logger.info("Создан HH автосбор %s: %s", source, job_id)
+    return job_id
+
+
+def hh_auto_enabled() -> bool:
+    return os.getenv("HH_SCRAPER_AUTO_ENABLED", "true").strip().casefold() in {"1", "true", "yes", "y", "on"}
+
+
+def hh_auto_interval_hours() -> float:
+    raw_value = os.getenv("HH_SCRAPER_AUTO_INTERVAL_HOURS", "5").strip()
+    try:
+        return max(0.1, float(raw_value))
+    except ValueError:
+        logger.warning("HH_SCRAPER_AUTO_INTERVAL_HOURS=%s некорректен, использую 5 часов", raw_value)
+        return 5.0
 
 
 async def auto_hunt_scheduler() -> None:
