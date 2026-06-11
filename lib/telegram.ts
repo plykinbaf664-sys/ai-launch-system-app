@@ -19,6 +19,12 @@ type TelegramMessage = {
 
 type TelegramUpdate = {
   message?: TelegramMessage;
+  callback_query?: {
+    id: string;
+    from: TelegramUser;
+    message?: TelegramMessage;
+    data?: string;
+  };
 };
 
 export type TelegramPrivateTextMessage = {
@@ -29,6 +35,7 @@ export type TelegramPrivateTextMessage = {
   lastName: string | null;
   text: string;
   telegramMessageId: number;
+  callbackQueryId?: string;
 };
 
 type TelegramSendMessageResponse = {
@@ -41,7 +48,11 @@ type TelegramSendMessageResponse = {
 };
 
 type TelegramReplyMarkup = {
-  keyboard: string[][];
+  keyboard?: string[][];
+  inline_keyboard?: {
+    text: string;
+    callback_data: string;
+  }[][];
   resize_keyboard?: boolean;
   one_time_keyboard?: boolean;
 };
@@ -99,6 +110,27 @@ export async function verifyTelegramWebhookSecret(request: Request) {
 }
 
 export function parseTelegramPrivateTextMessage(update: TelegramUpdate): TelegramPrivateTextMessage | null {
+  const callbackQuery = update.callback_query;
+
+  if (callbackQuery?.message?.chat.type === "private" && typeof callbackQuery.data === "string") {
+    const text = callbackQuery.data.trim();
+
+    if (!text) {
+      return null;
+    }
+
+    return {
+      telegramUserId: callbackQuery.from.id,
+      telegramChatId: callbackQuery.message.chat.id,
+      telegramUsername: callbackQuery.from.username ?? null,
+      firstName: callbackQuery.from.first_name ?? null,
+      lastName: callbackQuery.from.last_name ?? null,
+      text,
+      telegramMessageId: callbackQuery.message.message_id,
+      callbackQueryId: callbackQuery.id,
+    };
+  }
+
   const message = update.message;
 
   if (!message || message.chat.type !== "private" || typeof message.text !== "string") {
@@ -126,6 +158,24 @@ export function parseTelegramPrivateTextMessage(update: TelegramUpdate): Telegra
     text,
     telegramMessageId: message.message_id,
   };
+}
+
+export async function answerCallbackQuery(callbackQueryId: string) {
+  const response = await fetch(`https://api.telegram.org/bot${getTelegramBotToken()}/answerCallbackQuery`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+    }),
+  });
+
+  const data = (await response.json()) as TelegramSendMessageResponse;
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.description || "Telegram answerCallbackQuery failed.");
+  }
 }
 
 export async function sendTextMessage(chatId: number, text: string, replyMarkup?: TelegramReplyMarkup) {

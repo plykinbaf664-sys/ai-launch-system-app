@@ -79,9 +79,12 @@ export function getMarketingRoiQuizKeyboard(stage: string) {
   }
 
   return {
-    keyboard: question.options.map((option) => [option.label]),
-    resize_keyboard: true,
-    one_time_keyboard: true,
+    inline_keyboard: question.options.map((option) => [
+      {
+        text: option.label,
+        callback_data: option.key,
+      },
+    ]),
   };
 }
 

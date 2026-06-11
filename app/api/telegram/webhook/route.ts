@@ -23,6 +23,7 @@ import {
   type MarketingRoiQuizAnswerKey,
 } from "@/lib/neiroclozer/marketing-roi-quiz";
 import {
+  answerCallbackQuery,
   parseTelegramPrivateTextMessage,
   sendTextMessage,
   verifyTelegramWebhookSecret,
@@ -331,6 +332,10 @@ export async function POST(request: Request) {
 
     if (!incomingMessage) {
       return Response.json({ ok: true, ignored: true });
+    }
+
+    if (incomingMessage.callbackQueryId) {
+      await answerCallbackQuery(incomingMessage.callbackQueryId);
     }
 
     const expertProfile = await getActiveExpertProfile();
