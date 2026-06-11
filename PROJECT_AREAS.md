@@ -4,24 +4,6 @@ This file defines how we split work inside one git repository. A git branch alwa
 
 ## Applications
 
-### Neurocloser
-
-Branch prefix:
-
-```bash
-neurocloser/<task-name>
-```
-
-Main files and folders:
-
-```text
-lib/neiroclozer/
-app/api/telegram/
-app/api/cron/gift-followups/
-app/api/gift/
-components/ReviewsTable.tsx
-```
-
 ### Research AI
 
 Branch prefix:
@@ -75,7 +57,6 @@ vercel.json
 2. Name the branch by project area:
 
 ```bash
-neurocloser/<task-name>
 research-ai/<task-name>
 leadgen/<task-name>
 shared/<task-name>
