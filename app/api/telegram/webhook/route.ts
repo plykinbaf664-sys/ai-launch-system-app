@@ -39,6 +39,10 @@ function getEntryFlowMode() {
   return process.env.NEIRO_ENTRY_FLOW_MODE === "gift" ? "gift" : DEFAULT_ENTRY_FLOW_MODE;
 }
 
+function isStartCommand(text: string) {
+  return text.trim().toLowerCase() === "/start";
+}
+
 function getPublicBaseUrl(request: Request) {
   const envBaseUrl =
     process.env.TELEGRAM_WEBHOOK_BASE_URL ||
@@ -338,22 +342,27 @@ export async function POST(request: Request) {
     const existingLead = await getLeadByTelegramUserId(incomingMessage.telegramUserId);
     const isNewLead = !existingLead;
     const entryFlowMode = getEntryFlowMode();
-    const isExistingQuizStage = isMarketingRoiQuizStage(existingLead?.current_stage);
+    const shouldRestartQuiz = Boolean(existingLead && entryFlowMode === "quiz" && isStartCommand(incomingMessage.text));
+    const isExistingQuizStage = !shouldRestartQuiz && isMarketingRoiQuizStage(existingLead?.current_stage);
     const normalizedUserText = incomingMessage.text.toLowerCase();
     const hasBooked = hasBookedSignal(normalizedUserText);
     const hasPositiveReply = isShortPositiveReply(normalizedUserText);
-    const matchedOffer = isExistingQuizStage
+    const matchedOffer = shouldRestartQuiz
+      ? null
+      : isExistingQuizStage
       ? existingLead?.matched_offer ?? null
       : detectFinalMatchedOffer(detectMatchedOffer(normalizedUserText), existingLead?.matched_offer, hasBooked);
     const manualFollowup = needsManualFollowup(normalizedUserText);
     const warmthLevel = detectWarmthLevel(normalizedUserText, matchedOffer, manualFollowup);
-    const leadStatus = isExistingQuizStage
+    const leadStatus = shouldRestartQuiz
+      ? "active"
+      : isExistingQuizStage
       ? existingLead?.status ?? "active"
       : hasBooked || (hasPositiveReply && (matchedOffer === "diagnostic" || manualFollowup))
         ? "qualified"
         : detectLeadStatus(isNewLead, matchedOffer, warmthLevel, manualFollowup);
     const currentStage =
-      isNewLead && entryFlowMode === "quiz"
+      (isNewLead && entryFlowMode === "quiz") || shouldRestartQuiz
         ? MARKETING_ROI_QUIZ_STAGES.question1
         : isExistingQuizStage
           ? existingLead.current_stage
@@ -410,7 +419,7 @@ export async function POST(request: Request) {
       messageType: "user",
     });
 
-    if (isNewLead) {
+    if (isNewLead || shouldRestartQuiz) {
       const welcomeResult = await sendTextMessage(incomingMessage.telegramChatId, expertProfile.welcome_message);
       await insertMessage({
         leadId: lead.id,
