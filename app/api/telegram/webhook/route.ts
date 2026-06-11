@@ -335,7 +335,10 @@ export async function POST(request: Request) {
     }
 
     if (incomingMessage.callbackQueryId) {
-      await answerCallbackQuery(incomingMessage.callbackQueryId);
+      answerCallbackQuery(incomingMessage.callbackQueryId).catch((error) => {
+        const message = error instanceof Error ? error.message : "Unknown callback answer error.";
+        console.error("Telegram callback answer error:", message);
+      });
     }
 
     const expertProfile = await getActiveExpertProfile();
