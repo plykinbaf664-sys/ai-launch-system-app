@@ -12,6 +12,17 @@ import {
 import { buildNeiroPrompt } from "@/lib/neiroclozer/prompt-builder";
 import { generateNeiroReply } from "@/lib/neiroclozer/generate-reply";
 import {
+  buildInvalidMarketingRoiQuizAnswerText,
+  buildMarketingRoiQuizVerdict,
+  getMarketingRoiQuizKeyboard,
+  getMarketingRoiQuizQuestion,
+  getNextMarketingRoiQuizStage,
+  isMarketingRoiQuizStage,
+  MARKETING_ROI_QUIZ_STAGES,
+  parseMarketingRoiQuizAnswer,
+  type MarketingRoiQuizAnswerKey,
+} from "@/lib/neiroclozer/marketing-roi-quiz";
+import {
   parseTelegramPrivateTextMessage,
   sendTextMessage,
   verifyTelegramWebhookSecret,
@@ -22,6 +33,11 @@ function buildGiftText(giftMessage: string, giftUrl: string) {
 }
 
 const GIFT_FOLLOWUP_DELAY_MS = 15 * 60 * 1000;
+const DEFAULT_ENTRY_FLOW_MODE = "quiz";
+
+function getEntryFlowMode() {
+  return process.env.NEIRO_ENTRY_FLOW_MODE === "gift" ? "gift" : DEFAULT_ENTRY_FLOW_MODE;
+}
 
 function getPublicBaseUrl(request: Request) {
   const envBaseUrl =
@@ -68,6 +84,36 @@ function getBookedStage(matchedOffer: string | null, currentStage: string) {
   }
 
   return "diagnostic_booked";
+}
+
+async function sendMarketingRoiQuizQuestion(chatId: number, leadId: string, expertProfileId: string, stage: string) {
+  const question = getMarketingRoiQuizQuestion(stage);
+
+  if (!question) {
+    return null;
+  }
+
+  const result = await sendTextMessage(chatId, question.text, getMarketingRoiQuizKeyboard(stage));
+  await insertMessage({
+    leadId,
+    expertProfileId,
+    direction: "outgoing",
+    channel: "telegram",
+    telegramMessageId: result.telegramMessageId,
+    text: question.text,
+    messageType: "qual_question",
+  });
+
+  return result;
+}
+
+function extractRecentMarketingRoiQuizAnswers(messages: { direction: string; text: string; created_at: string }[]) {
+  return [...messages]
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .filter((message) => message.direction === "incoming")
+    .map((message) => parseMarketingRoiQuizAnswer(message.text))
+    .filter((answer): answer is MarketingRoiQuizAnswerKey => Boolean(answer))
+    .slice(-3);
 }
 
 function hasAnyKeyword(text: string, keywords: string[]) {
@@ -291,27 +337,33 @@ export async function POST(request: Request) {
 
     const existingLead = await getLeadByTelegramUserId(incomingMessage.telegramUserId);
     const isNewLead = !existingLead;
+    const entryFlowMode = getEntryFlowMode();
+    const isExistingQuizStage = isMarketingRoiQuizStage(existingLead?.current_stage);
     const normalizedUserText = incomingMessage.text.toLowerCase();
     const hasBooked = hasBookedSignal(normalizedUserText);
     const hasPositiveReply = isShortPositiveReply(normalizedUserText);
-    const matchedOffer = detectFinalMatchedOffer(
-      detectMatchedOffer(normalizedUserText),
-      existingLead?.matched_offer,
-      hasBooked,
-    );
+    const matchedOffer = isExistingQuizStage
+      ? existingLead?.matched_offer ?? null
+      : detectFinalMatchedOffer(detectMatchedOffer(normalizedUserText), existingLead?.matched_offer, hasBooked);
     const manualFollowup = needsManualFollowup(normalizedUserText);
     const warmthLevel = detectWarmthLevel(normalizedUserText, matchedOffer, manualFollowup);
-    const leadStatus =
-      hasBooked || (hasPositiveReply && (matchedOffer === "diagnostic" || manualFollowup))
+    const leadStatus = isExistingQuizStage
+      ? existingLead?.status ?? "active"
+      : hasBooked || (hasPositiveReply && (matchedOffer === "diagnostic" || manualFollowup))
         ? "qualified"
         : detectLeadStatus(isNewLead, matchedOffer, warmthLevel, manualFollowup);
-    const currentStage = detectCurrentStage(
-      matchedOffer,
-      manualFollowup,
-      hasBooked,
-      hasPositiveReply,
-      existingLead?.current_stage,
-    );
+    const currentStage =
+      isNewLead && entryFlowMode === "quiz"
+        ? MARKETING_ROI_QUIZ_STAGES.question1
+        : isExistingQuizStage
+          ? existingLead.current_stage
+          : detectCurrentStage(
+              matchedOffer,
+              manualFollowup,
+              hasBooked,
+              hasPositiveReply,
+              existingLead?.current_stage,
+            );
     const lead =
       existingLead ??
       (await createLead({
@@ -328,7 +380,8 @@ export async function POST(request: Request) {
         lastUserMessage: incomingMessage.text,
         warmthLevel,
         giftLinkClickedAt: null,
-        giftFollowupDueAt: new Date(Date.now() + GIFT_FOLLOWUP_DELAY_MS).toISOString(),
+        giftFollowupDueAt:
+          entryFlowMode === "gift" ? new Date(Date.now() + GIFT_FOLLOWUP_DELAY_MS).toISOString() : null,
         giftFollowupSentAt: null,
       }));
 
@@ -369,6 +422,21 @@ export async function POST(request: Request) {
         messageType: "welcome",
       });
 
+      if (entryFlowMode === "quiz") {
+        await sendMarketingRoiQuizQuestion(
+          incomingMessage.telegramChatId,
+          lead.id,
+          expertProfile.id,
+          MARKETING_ROI_QUIZ_STAGES.question1,
+        );
+
+        await updateLeadById(lead.id, {
+          currentStage: MARKETING_ROI_QUIZ_STAGES.question1,
+        });
+
+        return Response.json({ ok: true });
+      }
+
       const trackedGiftUrl = buildTrackedGiftUrl(request, lead.id, expertProfile.gift_url);
       const giftText = buildGiftText(expertProfile.gift_message, trackedGiftUrl);
       const giftResult = await sendTextMessage(incomingMessage.telegramChatId, giftText);
@@ -402,6 +470,62 @@ export async function POST(request: Request) {
 
       await updateLeadById(lead.id, {
         currentStage: "awaiting_qualification_reply",
+      });
+    } else if (isExistingQuizStage) {
+      const answer = parseMarketingRoiQuizAnswer(incomingMessage.text);
+
+      if (!answer) {
+        const invalidAnswerText = buildInvalidMarketingRoiQuizAnswerText(existingLead.current_stage);
+        const invalidAnswerResult = await sendTextMessage(
+          incomingMessage.telegramChatId,
+          invalidAnswerText,
+          getMarketingRoiQuizKeyboard(existingLead.current_stage),
+        );
+
+        await insertMessage({
+          leadId: lead.id,
+          expertProfileId: expertProfile.id,
+          direction: "outgoing",
+          channel: "telegram",
+          telegramMessageId: invalidAnswerResult.telegramMessageId,
+          text: invalidAnswerText,
+          messageType: "qual_question",
+        });
+
+        return Response.json({ ok: true });
+      }
+
+      const nextStage = getNextMarketingRoiQuizStage(existingLead.current_stage);
+
+      if (nextStage !== MARKETING_ROI_QUIZ_STAGES.completed) {
+        await sendMarketingRoiQuizQuestion(incomingMessage.telegramChatId, lead.id, expertProfile.id, nextStage);
+        await updateLeadById(lead.id, {
+          currentStage: nextStage,
+        });
+
+        return Response.json({ ok: true });
+      }
+
+      const recentMessages = await getRecentMessagesByLeadId(lead.id, 10);
+      const answerKeys = extractRecentMarketingRoiQuizAnswers(recentMessages);
+      const verdictText = buildMarketingRoiQuizVerdict(answerKeys);
+      const verdictResult = await sendTextMessage(incomingMessage.telegramChatId, verdictText);
+
+      await insertMessage({
+        leadId: lead.id,
+        expertProfileId: expertProfile.id,
+        direction: "outgoing",
+        channel: "telegram",
+        telegramMessageId: verdictResult.telegramMessageId,
+        text: verdictText,
+        messageType: "ai_reply",
+      });
+
+      await updateLeadById(lead.id, {
+        status: "qualified",
+        currentStage: MARKETING_ROI_QUIZ_STAGES.completed,
+        matchedOffer: "diagnostic",
+        warmthLevel: "warm",
       });
     } else {
       const [offers, faq, objections, messages] = await Promise.all([

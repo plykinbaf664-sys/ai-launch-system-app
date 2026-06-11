@@ -40,6 +40,12 @@ type TelegramSendMessageResponse = {
   description?: string;
 };
 
+type TelegramReplyMarkup = {
+  keyboard: string[][];
+  resize_keyboard?: boolean;
+  one_time_keyboard?: boolean;
+};
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -122,7 +128,7 @@ export function parseTelegramPrivateTextMessage(update: TelegramUpdate): Telegra
   };
 }
 
-export async function sendTextMessage(chatId: number, text: string) {
+export async function sendTextMessage(chatId: number, text: string, replyMarkup?: TelegramReplyMarkup) {
   const formattedText = convertMarkdownToTelegramHtml(text);
 
   const response = await fetch(`https://api.telegram.org/bot${getTelegramBotToken()}/sendMessage`, {
@@ -134,6 +140,7 @@ export async function sendTextMessage(chatId: number, text: string) {
       chat_id: chatId,
       text: formattedText,
       parse_mode: "HTML",
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     }),
   });
 

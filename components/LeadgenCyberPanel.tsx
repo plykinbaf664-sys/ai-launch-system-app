@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styles from "@/app/leadgen-panel.module.css";
 
 const sources = [
@@ -35,11 +35,17 @@ const activity = [
   "SIGNAL_WINDOW:: 14 days",
 ];
 
+const entityWaypoints = [
+  { x: "72vw", y: "15vh", rotate: "-8deg" },
+  { x: "12vw", y: "24vh", rotate: "9deg" },
+  { x: "66vw", y: "58vh", rotate: "4deg" },
+  { x: "28vw", y: "68vh", rotate: "-12deg" },
+  { x: "82vw", y: "36vh", rotate: "7deg" },
+];
+
 export function LeadgenCyberPanel() {
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
-  const [entity, setEntity] = useState({ x: 420, y: 220 });
-  const entityRef = useRef(entity);
-  const targetRef = useRef(cursor);
+  const [entityIndex, setEntityIndex] = useState(0);
 
   const particles = useMemo(
     () =>
@@ -55,9 +61,7 @@ export function LeadgenCyberPanel() {
 
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {
-      const next = { x: event.clientX, y: event.clientY };
-      setCursor(next);
-      targetRef.current = next;
+      setCursor({ x: event.clientX, y: event.clientY });
     };
 
     window.addEventListener("pointermove", handleMove);
@@ -65,24 +69,14 @@ export function LeadgenCyberPanel() {
   }, []);
 
   useEffect(() => {
-    let frame = 0;
+    const interval = window.setInterval(() => {
+      setEntityIndex((current) => (current + 1) % entityWaypoints.length);
+    }, 5200);
 
-    const follow = () => {
-      const target = targetRef.current;
-      const current = entityRef.current;
-      const next = {
-        x: current.x + (target.x - current.x + 130) * 0.035,
-        y: current.y + (target.y - current.y - 90) * 0.035,
-      };
-
-      entityRef.current = next;
-      setEntity(next);
-      frame = window.requestAnimationFrame(follow);
-    };
-
-    frame = window.requestAnimationFrame(follow);
-    return () => window.cancelAnimationFrame(frame);
+    return () => window.clearInterval(interval);
   }, []);
+
+  const entity = entityWaypoints[entityIndex];
 
   return (
     <main className={styles.shell}>
@@ -93,10 +87,12 @@ export function LeadgenCyberPanel() {
       />
       <div
         className={styles.aiEntity}
-        style={{ transform: `translate3d(${entity.x}px, ${entity.y}px, 0)` }}
+        style={{ transform: `translate3d(${entity.x}, ${entity.y}, 0) rotate(${entity.rotate})` }}
         aria-hidden="true"
       >
+        <div className={styles.entityTail} />
         <div className={styles.entityCore} />
+        <div className={styles.entityFocus} />
         <div className={styles.entityRing} />
         <div className={styles.entityScan} />
       </div>

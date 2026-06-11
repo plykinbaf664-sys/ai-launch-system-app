@@ -317,35 +317,91 @@ async def index() -> str:
     .ai-entity {{
       position: fixed;
       z-index: 4;
-      width: 96px;
-      height: 96px;
+      width: 148px;
+      height: 108px;
       pointer-events: none;
       transform: translate3d(72vw, 20vh, 0);
+      transform-origin: 50% 50%;
+      transition: transform 3600ms cubic-bezier(.19, 1, .22, 1), filter 240ms ease;
     }}
-    .ai-core, .ai-ring, .ai-scan {{
+    .ai-core, .ai-focus, .ai-ring, .ai-scan, .ai-tail {{
       position: absolute;
-      inset: 0;
-      border-radius: 50%;
     }}
     .ai-core {{
-      background: radial-gradient(circle, rgba(255,255,255,.82), rgba(0,240,255,.28) 26%, transparent 62%);
-      box-shadow: 0 0 54px rgba(0,240,255,.42);
+      inset: 18px 34px 12px 28px;
+      border-radius: 52% 48% 58% 42%;
+      background:
+        radial-gradient(circle at 62% 40%, rgba(255,255,255,.92), rgba(0,240,255,.48) 18%, transparent 38%),
+        radial-gradient(circle at 34% 62%, rgba(0,255,153,.28), transparent 48%),
+        radial-gradient(circle, rgba(0,240,255,.22), transparent 68%);
+      box-shadow: 0 0 64px rgba(0,240,255,.48), 0 0 110px rgba(0,255,153,.12);
       animation: entity-float 5s ease-in-out infinite;
     }}
+    .ai-core::before, .ai-core::after {{
+      position: absolute;
+      content: "";
+      border-radius: 50%;
+      background: rgba(255,255,255,.8);
+      box-shadow: 0 0 18px rgba(255,255,255,.62), 0 0 32px rgba(0,240,255,.52);
+    }}
+    .ai-core::before {{
+      width: 10px;
+      height: 10px;
+      right: 28px;
+      top: 24px;
+    }}
+    .ai-core::after {{
+      width: 6px;
+      height: 6px;
+      right: 45px;
+      top: 36px;
+      opacity: .75;
+    }}
+    .ai-focus {{
+      width: 42px;
+      height: 26px;
+      right: 26px;
+      top: 38px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,.82), rgba(0,240,255,.2) 45%, transparent 72%);
+      filter: blur(.4px);
+      animation: focus-pulse 2.8s ease-in-out infinite;
+    }}
     .ai-ring {{
+      inset: 8px 18px 4px 16px;
       border: 1px solid rgba(0,240,255,.42);
-      transform: scale(.82);
+      border-radius: 48% 52% 44% 56%;
       animation: rotate 8s linear infinite;
     }}
     .ai-scan {{
+      inset: 10px 22px 8px 18px;
+      border-radius: 50%;
       border-top: 1px solid rgba(255,255,255,.5);
       animation: scan 2.6s ease-in-out infinite;
+    }}
+    .ai-tail {{
+      left: -16px;
+      top: 42px;
+      width: 92px;
+      height: 38px;
+      border-radius: 60% 10% 10% 60%;
+      background: linear-gradient(90deg, transparent, rgba(0,240,255,.12), rgba(0,255,153,.08));
+      filter: blur(8px);
+      animation: tail-breathe 3.4s ease-in-out infinite;
     }}
     main > p:nth-of-type(2) {{ display: none; }}
     @keyframes rotate {{ to {{ rotate: 360deg; }} }}
     @keyframes entity-float {{
       0%, 100% {{ transform: translateY(0) scale(1); }}
       50% {{ transform: translateY(-10px) scale(1.04); }}
+    }}
+    @keyframes focus-pulse {{
+      0%, 100% {{ transform: scale(.88); opacity: .58; }}
+      50% {{ transform: scale(1.12); opacity: 1; }}
+    }}
+    @keyframes tail-breathe {{
+      0%, 100% {{ transform: scaleX(.78); opacity: .36; }}
+      50% {{ transform: scaleX(1.12); opacity: .68; }}
     }}
     @keyframes scan {{
       0%, 100% {{ transform: rotate(0deg) scale(.86); opacity: .3; }}
@@ -365,7 +421,9 @@ async def index() -> str:
 <body>
   <div class="cursor-glow" id="cursorGlow"></div>
   <div class="ai-entity" id="aiEntity" aria-hidden="true">
+    <div class="ai-tail"></div>
     <div class="ai-core"></div>
+    <div class="ai-focus"></div>
     <div class="ai-ring"></div>
     <div class="ai-scan"></div>
   </div>
@@ -437,10 +495,14 @@ async def index() -> str:
     const cursorGlow = document.getElementById("cursorGlow");
     const aiEntity = document.getElementById("aiEntity");
     let timer = null;
-    let targetX = window.innerWidth * 0.72;
-    let targetY = window.innerHeight * 0.2;
-    let entityX = targetX;
-    let entityY = targetY;
+    let waypointIndex = 0;
+    const entityWaypoints = [
+      {{ x: "72vw", y: "15vh", rotate: "-8deg" }},
+      {{ x: "12vw", y: "24vh", rotate: "9deg" }},
+      {{ x: "66vw", y: "58vh", rotate: "4deg" }},
+      {{ x: "28vw", y: "68vh", rotate: "-12deg" }},
+      {{ x: "82vw", y: "36vh", rotate: "7deg" }},
+    ];
 
     document.querySelector('label[for="keywords"]').textContent = "Instagram intent keywords";
     document.querySelector('label[for="maxCompetitors"]').textContent = "Donors";
@@ -454,18 +516,16 @@ async def index() -> str:
     statusBox.textContent = "SYSTEM READY\\nAwaiting command.";
 
     window.addEventListener("pointermove", (event) => {{
-      targetX = event.clientX;
-      targetY = event.clientY;
       cursorGlow.style.transform = `translate3d(${{event.clientX - 190}}px, ${{event.clientY - 190}}px, 0)`;
     }});
 
-    function followEntity() {{
-      entityX += (targetX - entityX + 130) * 0.035;
-      entityY += (targetY - entityY - 90) * 0.035;
-      aiEntity.style.transform = `translate3d(${{entityX}}px, ${{entityY}}px, 0)`;
-      window.requestAnimationFrame(followEntity);
+    function moveEntity() {{
+      waypointIndex = (waypointIndex + 1) % entityWaypoints.length;
+      const point = entityWaypoints[waypointIndex];
+      aiEntity.style.transform = `translate3d(${{point.x}}, ${{point.y}}, 0) rotate(${{point.rotate}})`;
     }}
-    followEntity();
+    moveEntity();
+    window.setInterval(moveEntity, 5200);
 
     function parseKeywords(value) {{
       return value.split(/[\\n,]+/).map((item) => item.trim()).filter(Boolean);
